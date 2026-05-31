@@ -40,14 +40,15 @@ const tLink=id=>'<a href="#/team/'+id+'">'+teamLogo(id)+esc(tName(id))+'</a>';
 const aLink=id=>athById[id]?'<a href="#/player/'+id+'">'+avatar(id)+esc(athById[id].name)+'</a>':'#'+id;
 // Real champion icon via CSS sprite-crop of the game sheet, using window.CHAMP_FRAMES
 // (id -> {x,y,w,h,sw,sh}) + window.ICON_BASE. Absent (e.g. local broadcast page) -> ''.
-function champIcon(n,size){size=size||20;const F=window.CHAMP_FRAMES,f=F&&F[n];if(!f||!f.h)return champToken(n,size);
+function champIcon(n,size,ground,extra){size=size||20;const F=window.CHAMP_FRAMES,f=F&&F[n];if(!f||!f.h)return champToken(n,size);
   // Contain-fit a single idle frame into the square box. Most champion frames are
   // taller than wide, so scaling to the box height (the old approach) left the box
   // wider than the frame and the horizontally-packed neighbor frames bled in on the
   // sides. Sizing the inner <i> to the frame's exact display rect (its background
-  // clips to that box) and centering it shows ONE frame, letterboxed.
-  const s=size/Math.max(f.w,f.h),dw=f.w*s,dh=f.h*s,ox=(size-dw)/2,oy=(size-dh)/2;
-  return '<span class="cico" style="width:'+size+'px;height:'+size+'px"><i style="width:'+dw.toFixed(1)+'px;height:'+dh.toFixed(1)+'px;left:'+ox.toFixed(1)+'px;top:'+oy.toFixed(1)+'px;background-image:url(\''+(window.ICON_BASE||'')+'icons/champion/'+encodeURIComponent(n)+'.png\');background-size:'+(f.sw*s).toFixed(1)+'px '+(f.sh*s).toFixed(1)+'px;background-position:'+(-f.x*s).toFixed(1)+'px '+(-f.y*s).toFixed(1)+'px"></i></span>';}
+  // clips to that box) and centering it shows ONE frame, letterboxed. ground=true
+  // bottom-aligns (standing characters sit on the floor of the box, not floating).
+  const s=size/Math.max(f.w,f.h),dw=f.w*s,dh=f.h*s,ox=(size-dw)/2,oy=ground?(size-dh):(size-dh)/2;
+  return '<span class="cico'+(extra?' '+extra:'')+'" style="width:'+size+'px;height:'+size+'px"><i style="width:'+dw.toFixed(1)+'px;height:'+dh.toFixed(1)+'px;left:'+ox.toFixed(1)+'px;top:'+oy.toFixed(1)+'px;background-image:url(\''+(window.ICON_BASE||'')+'icons/champion/'+encodeURIComponent(n)+'.png\');background-size:'+(f.sw*s).toFixed(1)+'px '+(f.sh*s).toFixed(1)+'px;background-position:'+(-f.x*s).toFixed(1)+'px '+(-f.y*s).toFixed(1)+'px"></i></span>';}
 const cLink=n=>'<a href="#/champion/'+encodeURIComponent(n)+'">'+champIcon(n)+esc(champName(n))+'</a>';
 const lLink=id=>leagueById[id]?'<a href="#/league/'+id+'">'+esc(leagueById[id].name)+'</a>':('League '+id);
 // Inline-SVG sparkline. invert=true puts smaller values up top (for rank, where #1 is best).
@@ -72,18 +73,31 @@ function nav(){document.getElementById('nav').innerHTML='<span class="brand">�
   '<a href="#/">Standings</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/matches">Matches</a>'+
   '<input id="q" placeholder="Search teams, players, champions…"><span class="upd">#'+(D.updated||0)+'</span>';
   const q=document.getElementById('q');q.oninput=()=>{const v=q.value.trim();location.hash=v?('#/search/'+encodeURIComponent(v)):'#/';};}
-function vStandings(){let h='<h1>Standings</h1>';D.leagues.forEach(l=>{(compsByLeague[l.id]||[]).forEach(c=>{
-  h+='<h2>'+lLink(l.id)+'</h2><table class="s"><thead><tr><th data-nosort>#</th><th>Team</th><th data-num>Pts</th><th data-num>W</th><th data-num>L</th><th data-num>Win%</th><th data-num>SW</th><th data-num>SL</th><th data-num>K</th><th data-num>Adj</th></tr></thead><tbody>';
+function statCell(l,v,cls){return '<div><span class="l">'+esc(l)+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>';}
+function heroHeader(art,kick,title,sub,stats){return '<div class="hero">'+(art?'<div class="art">'+art+'</div>':'')+
+  '<div class="ht"><div class="kick">'+esc(kick)+'</div><h1>'+title+'</h1>'+(sub?'<p class="sub">'+sub+'</p>':'')+
+  (stats&&stats.length?'<div class="statline">'+stats.join('')+'</div>':'')+'</div></div>';}
+function scrollToEl(id){const e=document.getElementById(id);if(e)e.scrollIntoView({behavior:'smooth',block:'start'});}
+function vStandings(){
+  let h=heroHeader('','League Hub','Standings','Custom-points standings · auto-updating live',
+    [statCell('Leagues',D.leagues.length),statCell('Teams',D.teams.length),statCell('Update','#'+(D.updated||0))]);
+  const pills=[];D.leagues.forEach(l=>{if((compsByLeague[l.id]||[]).length)pills.push('<a onclick="scrollToEl(\'lg-'+l.id+'\')">'+esc(l.name)+'</a>');});
+  if(pills.length>1)h+='<div class="switch">'+pills.join('')+'</div>';
+  D.leagues.forEach(l=>{(compsByLeague[l.id]||[]).forEach(c=>{
+  h+='<h2 id="lg-'+l.id+'">'+lLink(l.id)+'</h2><table class="s"><thead><tr><th data-nosort>#</th><th>Team</th><th data-num>Pts</th><th data-num>W</th><th data-num>L</th><th data-num>Win%</th><th data-num>SW</th><th data-num>SL</th><th data-num>K</th><th data-num>Adj</th></tr></thead><tbody>';
   c.standings.forEach((s,i)=>{const adj=s.adj?('<span class="'+(s.adj>0?'pos">+':'neg">')+s.adj+'</span>'):'';
     h+='<tr'+(i===0?' class="lead"':'')+'><td>'+(i+1)+'</td><td>'+tLink(s.team_id)+'</td><td class="num"><b>'+s.points+'</b></td><td class="num">'+s.win+'</td><td class="num">'+s.lose+'</td><td class="num">'+pct(s.win,s.win+s.lose)+'</td><td class="num">'+s.set_win+'</td><td class="num">'+s.set_lose+'</td><td class="num">'+s.kill+'</td><td class="num">'+adj+'</td></tr>';});
   h+='</tbody></table>';});});mount(h);}
 function vTeams(){let h='<h1>Teams</h1><table class="s"><thead><tr><th>Team</th><th>Manager</th><th>League</th><th data-num>Fans</th><th data-num>Balance</th></tr></thead><tbody>';
   D.teams.forEach(t=>{const l=leagueById[t.league_id];h+='<tr><td>'+tLink(t.id)+'</td><td>'+esc(t.manager)+'</td><td>'+lLink(t.league_id)+'</td><td class="num" data-s="'+t.fan_count+'">'+t.fan_count.toLocaleString()+'</td><td class="num" data-s="'+t.balance+'">'+money(t.balance)+'</td></tr>';});
   mount(h+'</tbody></table>');}
-function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</h1>');const l=leagueById[t.league_id];
-  let h='<h1>'+esc(t.name)+'</h1><p class="sub">'+lLink(t.league_id)+' · manager '+esc(t.manager)+'</p>';
-  h+='<div class="kv"><div>Fans <b>'+t.fan_count.toLocaleString()+'</b></div><div>Balance <b>'+money(t.balance)+'</b></div></div>';
-  if(t.rank_hist&&t.rank_hist.length>1){let rk=null;for(const c of (compsByLeague[t.league_id]||[])){const i=c.standings.findIndex(s=>s.team_id==id);if(i>=0){rk=i+1;break;}}
+function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</h1>');
+  let rk=null,st=null;for(const c of (compsByLeague[t.league_id]||[])){const i=c.standings.findIndex(s=>s.team_id==id);if(i>=0){rk=i+1;st=c.standings[i];break;}}
+  const stats=[];if(rk)stats.push(statCell('Rank','#'+rk,rk===1?'gold':''));
+  if(st){stats.push(statCell('Record',st.win+'–'+st.lose));stats.push(statCell('Win%',pct(st.win,st.win+st.lose)));}
+  stats.push(statCell('Fans',t.fan_count.toLocaleString()));stats.push(statCell('Balance',money(t.balance),t.balance<0?'neg':''));
+  let h=heroHeader(teamLogo(id,74),'Team',esc(t.name),lLink(t.league_id)+' · manager '+esc(t.manager),stats);
+  if(t.rank_hist&&t.rank_hist.length>1){
     h+='<h2>Standings trend <small>last '+t.rank_hist.length+' days'+(rk?' · now #'+rk:'')+'</small></h2>'+spark(t.rank_hist,true,220,40);}
   const f=t.finance;
   if(f){h+='<h2>Business &amp; finances</h2>';
@@ -111,8 +125,9 @@ function vPlayers(){let h='<h1>Players</h1><p class="sub">click a column to sort
   D.athletes.forEach(a=>{h+='<tr><td>'+aLink(a.id)+'</td><td>'+(a.team_id!=null?tLink(a.team_id):'<span class="sub">FA</span>')+'</td><td class="num">'+a.age+'</td><td class="num">'+a.matches+'</td><td class="num">'+a.wins+'</td><td class="num">'+avgRating(a.rating,a.matches)+'</td><td class="num">'+a.kills+'</td><td class="num">'+a.deaths+'</td><td class="num">'+a.assists+'</td><td class="num">'+a.mvp+'</td></tr>';});
   mount(h+'</tbody></table>');}
 function vPlayer(id){const a=athById[id];if(!a)return mount('<h1>Player not found</h1>');
-  let h='<h1>'+esc(a.name)+'</h1><p class="sub">'+(a.team_id!=null?tLink(a.team_id):'Free agent')+' · age '+a.age+'</p>';
-  h+='<div class="kv"><div>Matches <b>'+a.matches+'</b></div><div>Wins <b>'+a.wins+'</b></div><div>Win% <b>'+pct(a.wins,a.matches)+'</b></div><div>Rating <b>'+avgRating(a.rating,a.matches)+'</b></div><div>KDA <b>'+a.kills+'/'+a.deaths+'/'+a.assists+'</b></div><div>MVP <b>'+a.mvp+'</b></div></div>';
+  const kda=a.deaths?((a.kills+a.assists)/a.deaths).toFixed(2):(a.kills+a.assists?'∞':'—');
+  const stats=[statCell('Rating',avgRating(a.rating,a.matches)),statCell('Matches',a.matches),statCell('Win%',pct(a.wins,a.matches)),statCell('KDA',kda),statCell('MVP',a.mvp)];
+  let h=heroHeader(avatar(id,74),'Player',esc(a.name),(a.team_id!=null?tLink(a.team_id):'Free agent')+' · age '+a.age,stats);
   h+='<h2>Recent champions</h2><div class="chips">'+(a.recent_champions.map(c=>'<span>'+cLink(c)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   if(a.likes&&a.likes.length)h+='<h2>Favored champions <small>👍</small></h2><div class="chips">'+a.likes.map(c=>'<span>'+cLink(c)+'</span>').join('')+'</div>';
   if(a.dislikes&&a.dislikes.length)h+='<h2>Disliked champions <small>👎</small></h2><div class="chips">'+a.dislikes.map(c=>'<span>'+cLink(c)+'</span>').join('')+'</div>';
@@ -140,13 +155,14 @@ function vTierList(){const ranked=D.champions.map(c=>({c,m:champMeta(c)})).filte
   ranked.forEach((x,i)=>{const q=(i+1)/n,t=(TIER_CUTS.find(c=>q<=c[1])||TIER_CUTS[TIER_CUTS.length-1])[0];(buckets[t]=buckets[t]||[]).push(x);});
   let h='<h2>Tier list <small>presence + win-rate over last '+(D.champions[0]?D.champions[0].games:0)+' games · ranked vs the field</small></h2>';
   for(const [t] of TIER_CUTS){const row=buckets[t];if(!row||!row.length)continue;
-    h+='<div class="tier"><span class="tlab tier-'+t+'">'+t+'</span><span class="tch">'+row.map(x=>'<span title="presence '+x.m.pres.toFixed(0)+'% · win '+x.m.wr.toFixed(0)+'%">'+cLink(x.c.name)+'</span>').join('')+'</span></div>';}
+    h+='<div class="tier"><span class="tlab tier-'+t+'">'+t+'</span><span class="tch">'+row.map(x=>'<span class="tchip" title="presence '+x.m.pres.toFixed(0)+'% · win '+x.m.wr.toFixed(0)+'%"><a href="#/champion/'+encodeURIComponent(x.c.name)+'">'+champIcon(x.c.name,30,true,'show')+esc(champName(x.c.name))+'</a></span>').join('')+'</span></div>';}
   return h;}
 function vChampions(){const g=D.champions[0]?D.champions[0].games:0;let h='<h1>Champions</h1><p class="sub">pick/ban/win over last '+g+' games · click to sort</p>'+vTierList()+'<table class="s"><thead><tr><th>Champion</th><th data-num>Picks</th><th data-num>Pick%</th><th data-num>Bans</th><th data-num>Ban%</th><th data-num>Pres%</th><th data-num>Win%</th></tr></thead><tbody>';
   D.champions.forEach(c=>{const pr=c.games?100*(c.picks+c.bans)/c.games:0;h+='<tr><td>'+cLink(c.name)+'</td><td class="num">'+c.picks+'</td><td class="num" data-s="'+(c.games?c.picks/c.games:0)+'">'+pct(c.picks,c.games)+'</td><td class="num">'+c.bans+'</td><td class="num" data-s="'+(c.games?c.bans/c.games:0)+'">'+pct(c.bans,c.games)+'</td><td class="num" data-s="'+pr+'">'+pr.toFixed(1)+'%</td><td class="num" data-s="'+(c.picks?c.wins/c.picks:0)+'">'+pct(c.wins,c.picks)+'</td></tr>';});
   mount(h+'</tbody></table>');}
-function vChampion(name){const c=champByName[name];let h='<h1>'+champIcon(name,40)+esc(champName(name))+'</h1>';
-  if(c){h+='<div class="kv"><div>Games <b>'+c.games+'</b></div><div>Picks <b>'+c.picks+'</b> ('+pct(c.picks,c.games)+')</div><div>Bans <b>'+c.bans+'</b> ('+pct(c.bans,c.games)+')</div><div>Win% <b>'+pct(c.wins,c.picks)+'</b></div></div>';}
+function vChampion(name){const c=champByName[name];
+  const stats=c?[statCell('Games',c.games),statCell('Pick%',pct(c.picks,c.games)),statCell('Ban%',pct(c.bans,c.games)),statCell('Win%',pct(c.wins,c.picks),c.picks&&c.wins/c.picks>=0.5?'pos':(c.picks?'neg':''))]:[];
+  let h=heroHeader(champIcon(name,74,true,'bare'),'Champion',esc(champName(name)),null,stats);
   if(c){let rr='';for(let i=0;i<5;i++){if(c.role_picks[i]>0)rr+='<tr><td>'+POS[i]+'</td><td class="num">'+c.role_picks[i]+'</td><td class="num">'+pct(c.role_wins[i],c.role_picks[i])+'</td></tr>';}
     if(rr)h+='<h2>By role</h2><table class="s"><thead><tr><th>Role</th><th data-num>Picks</th><th data-num>Win%</th></tr></thead><tbody>'+rr+'</tbody></table>';}
   const players={};D.matches.forEach(m=>m.picks.forEach(p=>{if(p.champion==name)players[p.athlete_id]=(players[p.athlete_id]||0)+1;}));
@@ -173,7 +189,11 @@ function vLeagues(){let h='<h1>Leagues</h1><p class="sub">click a column to sort
     h+='<tr><td>'+lLink(l.id)+'</td><td class="num">'+(l.division??'')+'</td><td class="num">'+tm.length+'</td><td>'+(leader!=null?tLink(leader):'—')+'</td><td class="num" data-s="'+prize+'">'+money(prize)+'</td><td class="num" data-s="'+fans+'">'+fans.toLocaleString()+'</td><td class="num" data-s="'+bal+'">'+money(bal)+'</td></tr>';});
   mount(h+'</tbody></table>');}
 function vLeague(id){const l=leagueById[id];if(!l)return mount('<h1>League not found</h1>');
-  let h='<h1>'+esc(l.name)+'</h1><p class="sub">Division '+(l.division??'?')+' · prize pool '+money((l.prize_pool||[]).reduce((a,b)=>a+b,0))+'</p>';
+  const tmAll=D.teams.filter(t=>t.league_id==id);const comp0=(compsByLeague[id]||[])[0];
+  const leader=comp0&&comp0.standings[0]?comp0.standings[0].team_id:null;
+  const stats=[statCell('Division',l.division??'?'),statCell('Teams',tmAll.length),statCell('Prize pool',money((l.prize_pool||[]).reduce((a,b)=>a+b,0)))];
+  let h=heroHeader(badge(initials(l.name),hue(l.name),'crest',74),'League',esc(l.name),
+    leader!=null?'Leader: '+tLink(leader):null,stats);
   (compsByLeague[l.id]||[]).forEach(c=>{h+='<h2>Standings</h2><table class="s"><thead><tr><th data-nosort>#</th><th>Team</th><th data-num>Pts</th><th data-num>W</th><th data-num>L</th><th data-num>Win%</th><th data-nosort>Trend</th></tr></thead><tbody>';
     c.standings.forEach((s,i)=>{const tt=teamById[s.team_id];h+='<tr'+(i===0?' class="lead"':'')+'><td>'+(i+1)+'</td><td>'+tLink(s.team_id)+'</td><td class="num"><b>'+s.points+'</b></td><td class="num">'+s.win+'</td><td class="num">'+s.lose+'</td><td class="num">'+pct(s.win,s.win+s.lose)+'</td><td>'+spark(tt&&tt.rank_hist,true,90,22)+'</td></tr>';});h+='</tbody></table>';});
   (compsByLeague[l.id]||[]).forEach(c=>{
