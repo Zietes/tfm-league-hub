@@ -20,8 +20,11 @@ function teamCrest(id,size){const t=teamById[id],nm=t?t.name:'T'+id;return badge
 // + TL_SW/TL_SH; falls back to the generated crest when art/data is absent.
 function teamLogo(id,size){size=size||20;const t=teamById[id],L=window.TEAM_LOGOS,r=t&&L&&L[t.logo];
   if(!r||!r.h)return teamCrest(id,size);
-  const s=size/r.h;
-  return '<span class="tlogo" style="width:'+size+'px;height:'+size+'px"><i style="width:'+((window.TL_SW||0)*s).toFixed(1)+'px;height:'+((window.TL_SH||0)*s).toFixed(1)+'px;left:'+(-r.x*s).toFixed(1)+'px;top:'+(-r.y*s).toFixed(1)+'px;background-image:url(\''+(window.ICON_BASE||'')+'icons/team_logo.png\')"></i></span>';}
+  // Contain-fit the cell into the square box: the inner <i> is the frame's exact
+  // display rectangle (its background clips to that box), centered with letterbox —
+  // so adjacent atlas cells never bleed in, regardless of the cell's aspect ratio.
+  const s=size/Math.max(r.w,r.h),dw=r.w*s,dh=r.h*s,ox=(size-dw)/2,oy=(size-dh)/2;
+  return '<span class="tlogo" style="width:'+size+'px;height:'+size+'px"><i style="width:'+dw.toFixed(1)+'px;height:'+dh.toFixed(1)+'px;left:'+ox.toFixed(1)+'px;top:'+oy.toFixed(1)+'px;background-image:url(\''+(window.ICON_BASE||'')+'icons/team_logo.png\');background-size:'+((window.TL_SW||0)*s).toFixed(1)+'px '+((window.TL_SH||0)*s).toFixed(1)+'px;background-position:'+(-r.x*s).toFixed(1)+'px '+(-r.y*s).toFixed(1)+'px"></i></span>';}
 function avatar(id,size){const a=athById[id],nm=a?a.name:'?';return badge(initials(nm),hue(nm),'av',size);}
 function champToken(n,size){return badge(initials(champName(n)),hue(n),'ctok',size);}
 // 5 role glyphs (Top/Jungle/Mid/Bot/Sup) as tiny inline SVG paths.
@@ -38,8 +41,13 @@ const aLink=id=>athById[id]?'<a href="#/player/'+id+'">'+avatar(id)+esc(athById[
 // Real champion icon via CSS sprite-crop of the game sheet, using window.CHAMP_FRAMES
 // (id -> {x,y,w,h,sw,sh}) + window.ICON_BASE. Absent (e.g. local broadcast page) -> ''.
 function champIcon(n,size){size=size||20;const F=window.CHAMP_FRAMES,f=F&&F[n];if(!f||!f.h)return champToken(n,size);
-  const s=size/f.h,fx=(size-f.w*s)/2;
-  return '<span class="cico" style="width:'+size+'px;height:'+size+'px"><i style="width:'+(f.sw*s).toFixed(1)+'px;height:'+(f.sh*s).toFixed(1)+'px;left:'+(fx-f.x*s).toFixed(1)+'px;top:'+(-f.y*s).toFixed(1)+'px;background-image:url(\''+(window.ICON_BASE||'')+'icons/champion/'+encodeURIComponent(n)+'.png\')"></i></span>';}
+  // Contain-fit a single idle frame into the square box. Most champion frames are
+  // taller than wide, so scaling to the box height (the old approach) left the box
+  // wider than the frame and the horizontally-packed neighbor frames bled in on the
+  // sides. Sizing the inner <i> to the frame's exact display rect (its background
+  // clips to that box) and centering it shows ONE frame, letterboxed.
+  const s=size/Math.max(f.w,f.h),dw=f.w*s,dh=f.h*s,ox=(size-dw)/2,oy=(size-dh)/2;
+  return '<span class="cico" style="width:'+size+'px;height:'+size+'px"><i style="width:'+dw.toFixed(1)+'px;height:'+dh.toFixed(1)+'px;left:'+ox.toFixed(1)+'px;top:'+oy.toFixed(1)+'px;background-image:url(\''+(window.ICON_BASE||'')+'icons/champion/'+encodeURIComponent(n)+'.png\');background-size:'+(f.sw*s).toFixed(1)+'px '+(f.sh*s).toFixed(1)+'px;background-position:'+(-f.x*s).toFixed(1)+'px '+(-f.y*s).toFixed(1)+'px"></i></span>';}
 const cLink=n=>'<a href="#/champion/'+encodeURIComponent(n)+'">'+champIcon(n)+esc(champName(n))+'</a>';
 const lLink=id=>leagueById[id]?'<a href="#/league/'+id+'">'+esc(leagueById[id].name)+'</a>':('League '+id);
 // Inline-SVG sparkline. invert=true puts smaller values up top (for rank, where #1 is best).
