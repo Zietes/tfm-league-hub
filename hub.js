@@ -1,10 +1,16 @@
 
-const D=window.LEAGUE_DATA||{leagues:[],competitions:[],teams:[],athletes:[],matches:[],champions:[],items:[]};
-D.items=D.items||[];
-const teamById={},athById={},leagueById={},champByName={},compsByLeague={};
-D.teams.forEach(t=>teamById[t.id]=t);D.athletes.forEach(a=>athById[a.id]=a);
-D.leagues.forEach(l=>leagueById[l.id]=l);D.champions.forEach(c=>champByName[c.name]=c);
-D.competitions.forEach(c=>{(compsByLeague[c.league_id]=compsByLeague[c.league_id]||[]).push(c);});
+let D=window.LEAGUE_DATA||{leagues:[],competitions:[],teams:[],athletes:[],matches:[],champions:[],items:[]};
+// Indices are rebuilt by buildIndex() so the hosted site can swap in fresh data
+// (applyData) without a full-page reload. ATTR_MAX is derived from the data too.
+let teamById={},athById={},leagueById={},champByName={},compsByLeague={},ATTR_MAX=1;
+function buildIndex(){
+  D.items=D.items||[];
+  teamById={};athById={};leagueById={};champByName={};compsByLeague={};
+  D.teams.forEach(t=>teamById[t.id]=t);D.athletes.forEach(a=>athById[a.id]=a);
+  D.leagues.forEach(l=>leagueById[l.id]=l);D.champions.forEach(c=>champByName[c.name]=c);
+  D.competitions.forEach(c=>{(compsByLeague[c.league_id]=compsByLeague[c.league_id]||[]).push(c);});
+  ATTR_MAX=Math.max(1,...D.athletes.flatMap(a=>a.attr?ATTR_DEFS.map(d=>a.attr[d[1]]||0):[0]));
+}
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 const cap=w=>w?w[0].toUpperCase()+w.slice(1):'';
 const champName=id=>String(id).split('_').map(cap).join(' ');
@@ -63,7 +69,6 @@ const grade=i=>['D','C','B','A','S'][i]||('Lv '+i);
 const money=v=>{v=+v||0;const s=v<0?'-':'';v=Math.abs(v);if(v>=1e9)return s+'$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return s+'$'+(v/1e6).toFixed(1)+'M';if(v>=1e3)return s+'$'+(v/1e3).toFixed(0)+'K';return s+'$'+v.toFixed(0);};
 const POS=['Top','Jungle','Mid','Bot','Sup'];
 const ATTR_DEFS=[['Monster Kills','last_hit'],['Skill Dodge','skill_avoid'],['Skill Hit','skill_hit'],['Control Speed','control_speed'],['Positioning','positioning'],['Judgment','judgement'],['Mental','mental'],['Focus','concentration'],['Calls','order'],['Roaming','roaming'],['Aggression','aggressive'],['Ego','ego']];
-const ATTR_MAX=Math.max(1,...D.athletes.flatMap(a=>a.attr?ATTR_DEFS.map(d=>a.attr[d[1]]||0):[0]));
 function makeSortable(t){[...t.tHead.rows[0].cells].forEach((th,i)=>{if('nosort' in th.dataset)return;th.style.cursor='pointer';
   th.onclick=()=>{const tb=t.tBodies[0];const rows=[...tb.rows];const dir=th._d=-(th._d||1);const num='num' in th.dataset;
     rows.sort((a,b)=>{let x=a.cells[i].dataset.s??a.cells[i].textContent,y=b.cells[i].dataset.s??b.cells[i].textContent;if(num){x=parseFloat(x)||0;y=parseFloat(y)||0;}else{x=(''+x).toLowerCase();y=(''+y).toLowerCase();}return x<y?dir:x>y?-dir:0;});
@@ -252,8 +257,20 @@ function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split
 const curHash=()=>(location.hash&&location.hash!=='#')?location.hash:'#/';
 addEventListener('hashchange',()=>{sessionStorage.setItem('hub_route',curHash());router();scrollTo(0,0);});
 addEventListener('beforeunload',()=>{sessionStorage.setItem('hub_route',curHash());sessionStorage.setItem('hub_sy',scrollY);});
-// The 20s auto-refresh can drop the URL fragment; restore the route before rendering.
+function setUpd(){const u=document.querySelector('#nav .upd');if(u)u.textContent='#'+(D.updated||0);}
+// Swap in fresh data and re-render the current route IN PLACE (no page reload → no
+// blink). Scroll is preserved; the nav (incl. the search box) is left intact, only the
+// update counter ticks. Sort state on the current table resets, same as a reload would.
+function applyData(d){if(!d)return;D=d;buildIndex();router();setUpd();}
+// Hosted site only: poll league_data.json and apply it when the publish counter moves.
+// The local file:// broadcast page can't fetch a sibling, so it keeps its <meta refresh>
+// (the mod rewrites that whole file each tick); polling is skipped there.
+function startPolling(){if(!/^https?:$/.test(location.protocol))return;
+  setInterval(()=>{fetch('league_data.json',{cache:'no-store'}).then(r=>r.ok?r.json():null)
+    .then(d=>{if(d&&d.updated!==D.updated)applyData(d);}).catch(()=>{});},20000);}
+// A <meta refresh> reload can drop the URL fragment; restore the route before rendering.
 const savedRoute=sessionStorage.getItem('hub_route');
 if(savedRoute&&savedRoute!=='#/'&&(!location.hash||location.hash==='#'||location.hash==='#/')){history.replaceState(null,'',savedRoute);}
-nav();router();
+buildIndex();nav();router();
 const sy=sessionStorage.getItem('hub_sy');if(sy)scrollTo(0,+sy);
+startPolling();
