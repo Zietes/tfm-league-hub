@@ -374,7 +374,7 @@ function vChampion(name){const c=champByName[name];const def=champDef(name);cons
       const eff=a?abilEffects(a):['Passive'],chips=a?abilChips(a):[],ico=skillIcon(name,idx,30);
       h+='<div class="abil'+(slot==='ult'?' ult-card':'')+(a?'':' passive-card')+'"><div class="abil-h">'+(ico?'<span class="abil-ico">'+ico+'</span>':'')+'<span class="abil-slot '+slot+'">'+lbl+'</span>'+(eff.length?'<span class="abil-eff">'+eff.map(e=>'<span class="etag'+(e==='Passive'?' passive':'')+'">'+esc(e)+'</span>').join('')+'</span>':'')+'</div>'
         +(d?'<p class="abil-d">'+(gd?d:esc(d))+'</p>':'')
-        +(chips.length?'<div class="abil-chips">'+chips.map(x=>'<span class="achip"><span class="al">'+x[0]+'</span><span class="av">'+x[1]+'</span></span>').join('')+'</div>':'')+'</div>';});
+        +(chips.length?'<div class="abil-chips">'+chips.map(x=>'<span class="achip"><span class="al">'+x[0]+'</span><span class="aval">'+x[1]+'</span></span>').join('')+'</div>':'')+'</div>';});
     h+='</div>';}
   if(c){let rr='';for(let i=0;i<5;i++){if(c.role_picks[i]>0)rr+='<tr><td>'+POS[i]+'</td><td class="num">'+c.role_picks[i]+'</td><td class="num">'+pct(c.role_wins[i],c.role_picks[i])+'</td></tr>';}
     if(rr)h+='<h2>By role</h2><table class="s"><thead><tr><th>Role</th><th data-num>Picks</th><th data-num>Win%</th></tr></thead><tbody>'+rr+'</tbody></table>';}
