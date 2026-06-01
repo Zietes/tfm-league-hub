@@ -129,7 +129,10 @@ h2{scroll-margin-top:66px}
 .owrap{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
 @media(max-width:680px){.owrap{grid-template-columns:1fr}}
 .owrap .ncard .byline{margin-top:8px;display:block}
-.article-body{max-width:64ch;line-height:1.75;color:var(--fg);font-size:15px;margin:14px 0}
+.article-body{max-width:66ch;margin:14px 0}
+.article-body p{line-height:1.75;color:var(--fg);font-size:15px;margin:0 0 13px}
+.article-body .bynum{font:600 12px/1.7 var(--mono);color:var(--mut);letter-spacing:.02em;border-top:1px solid var(--line);padding-top:10px}
+.article-body .bynum .win{color:var(--win)}.article-body .bynum .loss{color:var(--loss)}
 /* league switcher pills (standings landing) */
 .switch{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 20px}
 .switch a{cursor:pointer;padding:5px 12px;border-radius:999px;background:var(--surface2);

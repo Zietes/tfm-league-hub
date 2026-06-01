@@ -2,11 +2,12 @@
 let D=window.LEAGUE_DATA||{leagues:[],competitions:[],teams:[],athletes:[],matches:[],champions:[],items:[]};
 // Indices are rebuilt by buildIndex() so the hosted site can swap in fresh data
 // (applyData) without a full-page reload. ATTR_MAX is derived from the data too.
-let teamById={},athById={},leagueById={},champByName={},compsByLeague={},ATTR_MAX=1;
+let teamById={},athById={},leagueById={},champByName={},compsByLeague={},ATTR_MAX=1,teamByName={},athByName={};
 function buildIndex(){
   D.items=D.items||[];
-  teamById={};athById={};leagueById={};champByName={};compsByLeague={};
-  D.teams.forEach(t=>teamById[t.id]=t);D.athletes.forEach(a=>athById[a.id]=a);
+  teamById={};athById={};leagueById={};champByName={};compsByLeague={};teamByName={};athByName={};
+  D.teams.forEach(t=>{teamById[t.id]=t;teamByName[String(t.name).toLowerCase()]=t;});
+  D.athletes.forEach(a=>{athById[a.id]=a;athByName[String(a.name).toLowerCase()]=a;});
   D.leagues.forEach(l=>leagueById[l.id]=l);D.champions.forEach(c=>champByName[c.name]=c);
   D.competitions.forEach(c=>{(compsByLeague[c.league_id]=compsByLeague[c.league_id]||[]).push(c);});
   ATTR_MAX=Math.max(1,...D.athletes.flatMap(a=>a.attr?ATTR_DEFS.map(d=>a.attr[d[1]]||0):[0]));
@@ -326,14 +327,106 @@ function newsText(key){let o=window.NEWS_TEXT;if(!o)return null;for(const k of S
 // Game i18n carries inline markup (<#rrggbbaa>…<> colour spans etc.) — strip it so it
 // doesn't render as literal text once esc()'d.
 function stripTags(s){return String(s==null?'':s).replace(/<[^>]*>/g,'');}
-function resolveNews(it){let t=newsText(it.title);if(t==null)return null;(it.tb||[]).forEach(p=>{t=t.split('{'+p[0]+'}').join(p[1]);});return stripTags(t);}
-function resolveBody(it){if(!it.body)return null;let t=newsText(it.body);if(t==null)return null;(it.body_tb||[]).forEach(p=>{t=t.split('{'+p[0]+'}').join(p[1]);});return stripTags(t);}
+// Substitute {Param} binds. The game's EN templates often drop the space around a
+// placeholder (a Korean-localization artifact → "to{Condition}", "reached{Hours}hours"),
+// so re-insert a space at any alnum↔alnum seam created by the substitution.
+function subst(tpl,binds){let t=String(tpl==null?'':tpl);
+  (binds||[]).forEach(p=>{const k=String(p[0]).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),v=String(p[1]);
+    t=t.replace(new RegExp('\\{'+k+'\\}','g'),(m,off,str)=>{const b=str[off-1],a=str[off+m.length];
+      return (b&&/\w/.test(b)&&/^\w/.test(v)?' ':'')+v+(a&&/\w/.test(a)&&/\w$/.test(v)?' ':'');});});
+  return t;}
+function resolveNews(it){const t=newsText(it.title);return t==null?null:stripTags(subst(t,it.tb));}
+function resolveBody(it){if(!it.body)return null;const t=newsText(it.body);return t==null?null:stripTags(subst(t,it.body_tb));}
+
+// ===== Reporter synthesis: write the article body from OUR data, by scope =====
+function pick(arr,i){return arr[((i%arr.length)+arr.length)%arr.length];}
+function bindVal(it,k){const a=(it.body_tb||[]).concat(it.tb||[]);for(const p of a)if(p[0]===k)return p[1];return null;}
+function newsScope(it){const s=String(it.title).split('.');return (s[0]==='article'||s[0]==='alert')?s[1]:s[0];}
+function teamBind(it,k){const v=bindVal(it,k);return v?teamByName[String(v).toLowerCase()]:null;}
+function athBind(it){const id=bindVal(it,'AthleteId');if(id!=null&&athById[+id])return athById[+id];const nm=bindVal(it,'Athlete');return nm?athByName[String(nm).toLowerCase()]:null;}
+function rankPhrase(r){if(!r)return '';return (['','1st','2nd','3rd'][r.rank]||(r.rank+'th'))+' of '+r.n;}
+function leagueName(t){const l=t&&leagueById[t.league_id];return l?l.name:null;}
+function teamStar(tid){return D.athletes.filter(a=>a.team_id==tid&&a.matches>0).sort((x,y)=>(y.rating/(y.matches*10))-(x.rating/(x.matches*10)))[0]||null;}
+function recStr(r){return r?(r.s.win+'–'+r.s.lose):'';}
+function formDots(tid,n){return teamForm(tid,n||5).map(w=>'<span class="'+(w?'win':'loss')+'">'+(w?'W':'L')+'</span>').join('');}
+function h2hGames(a,b){return D.matches.filter(m=>(m.blue_team_id==a&&m.red_team_id==b)||(m.blue_team_id==b&&m.red_team_id==a));}
+function synthMatch(it,i){const A=teamBind(it,'MyTeam'),B=teamBind(it,'EnemyTeam');if(!A||!B)return null;
+  // Narrate from A (MyTeam = the article's subject, matching the game headline) but pick
+  // the win/loss language from the REAL scoreline so the body can't contradict the result.
+  const as=+bindVal(it,'MyScore')||0,bs=+bindVal(it,'EnemyScore')||0,aWon=as>=bs,win=aWon?A:B,close=Math.abs(as-bs)<=1;
+  const WV=close?['edged','outlasted','held off','squeezed past']:['dispatched','rolled past','took apart','overpowered'];
+  const LV=close?['fell just short against','were edged by','dropped a tight one to','came up short against']:['were dispatched by','fell to','were overpowered by','got rolled by'];
+  let p='<p>'+tLink(A.id)+' '+pick(aWon?WV:LV,i)+' '+tLink(B.id)+' <b>'+as+'–'+bs+'</b>'+(close?' in a series that went the distance':'')+'.';
+  const wr=teamRank(win.id);if(wr)p+=' '+esc(win.name)+' '+pick(['move to','sit','now hold'],i)+' '+rankPhrase(wr)+(leagueName(win)?' in '+esc(leagueName(win)):'')+'.';
+  p+='</p>';
+  const games=h2hGames(A.id,B.id);let mvp=null,best=-1,mg=null;
+  games.forEach(m=>{const wid=m.blue_win?m.blue_team_id:m.red_team_id;if(wid!=win.id)return;m.picks.filter(x=>x.blue===m.blue_win).forEach(x=>{const sc=(x.kills||0)*2+(x.assists||0)-(x.deaths||0)*1.5+(x.deal||0)/2000;if(sc>best){best=sc;mvp=x;mg=m;}});});
+  if(mvp){const a=athById[mvp.athlete_id];p+='<p>'+(a?aLink(a.id):'A standout')+' of '+tLink(win.id)+' set the tempo on '+cLink(mvp.champion)+', posting <b>'+(mvp.kills||0)+'/'+(mvp.deaths||0)+'/'+(mvp.assists||0)+'</b>'+(mvp.deal?' for '+(mvp.deal).toLocaleString()+' damage':'')+(mg?' — <a href="#/match/'+mg.id+'">view game</a>':'')+'.</p>';}
+  return p;}
+function synthPreMatch(it,i){const A=teamBind(it,'Team')||teamByName[String(bindVal(it,'TeamName')||'').toLowerCase()],B=teamBind(it,'EnemyTeam');if(!A&&!B)return null;
+  if(A&&B){const ar=teamRank(A.id),br=teamRank(B.id),sa=teamStar(A.id),sb=teamStar(B.id);
+    let p='<p>'+tLink(A.id)+(ar?' ('+rankPhrase(ar)+', '+recStr(ar)+')':'')+' '+pick(['square off with','run into','take on','meet'],i)+' '+tLink(B.id)+(br?' ('+rankPhrase(br)+', '+recStr(br)+')':'')+'.';
+    if(sa||sb)p+=' Eyes on '+(sa?aLink(sa.id)+' ('+avgRating(sa.rating,sa.matches)+')':'')+(sa&&sb?' and ':'')+(sb?aLink(sb.id)+' ('+avgRating(sb.rating,sb.matches)+')':'')+'.';
+    p+='</p>';
+    const h=h2hGames(A.id,B.id);if(h.length){let aw=0;h.forEach(m=>{if((m.blue_win?m.blue_team_id:m.red_team_id)==A.id)aw++;});const bw=h.length-aw,verb=aw>bw?'lead':aw<bw?'trail':'are level in';p+='<p>They have met '+h.length+' time'+(h.length>1?'s':'')+' recently; '+esc(A.name)+' '+verb+' the head-to-head '+aw+'–'+bw+'.</p>';}
+    p+='<p class="bynum">Form — '+esc(A.name)+': '+(formDots(A.id)||'—')+' &nbsp;·&nbsp; '+esc(B.name)+': '+(formDots(B.id)||'—')+'</p>';return p;}
+  const T=A||B,r=teamRank(T.id),st=teamStar(T.id);
+  let p='<p>'+tLink(T.id)+' '+pick(['head into the fixture','prep for the next test','look to bank points'],i)+(r?' '+rankPhrase(r)+' on a '+recStr(r)+' record':'')+'.';
+  if(st)p+=' '+aLink(st.id)+' leads the side ('+avgRating(st.rating,st.matches)+' rating'+(st.mvp?', '+st.mvp+' MVP'+(st.mvp>1?'s':''):'')+').';
+  return p+'</p><p class="bynum">Form: '+(formDots(T.id,6)||'—')+'</p>';}
+function synthPlayer(it,i){const a=athBind(it);if(!a||a.matches<1)return null; // no perf yet → let the topical game text speak
+  const kda=a.deaths?((a.kills+a.assists)/a.deaths).toFixed(2):'—';
+  let p='<p>'+aLink(a.id)+(a.team_id!=null?' of '+tLink(a.team_id):'')+' '+pick(['has been turning heads','is putting together a strong run','has been a focal point','keeps showing up when it matters'],i)+'.';
+  p+=' Over '+a.matches+' games this season, '+esc(a.name)+' is averaging a <b>'+avgRating(a.rating,a.matches)+'</b> rating on a '+kda+' KDA'+(a.mvp?', with '+a.mvp+' MVP'+(a.mvp>1?'s':''):'')+'.</p>';
+  if(a.recent_champions&&a.recent_champions.length)p+='<p>Signature picks: '+a.recent_champions.slice(0,4).map(c=>cLink(c)).join(', ')+'.</p>';
+  return p;}
+function synthTransfer(it,i){const buy=teamBind(it,'BuyTeam'),sell=teamBind(it,'SellTeam'),ath=athBind(it);
+  if(buy&&ath){let p='<p>'+aLink(ath.id)+' '+pick(['completes a switch','is on the move','has agreed terms','changes colours'],i)+(sell?' from '+tLink(sell.id):'')+' to '+tLink(buy.id)+(bindVal(it,'Money')?' for '+esc(bindVal(it,'Money')):'')+'.';
+    if(ath.matches>0)p+=' '+esc(ath.name)+' arrives with a '+avgRating(ath.rating,ath.matches)+' rating from '+ath.matches+' games last on the books.';
+    return p+'</p>';}
+  const T=teamBind(it,'Team'),pos=bindVal(it,'Position');
+  if(T&&pos){const PI={top:0,jungle:1,jng:1,mid:2,bottom:3,bot:3,support:4,sup:4}[String(pos).toLowerCase()];
+    const st=(PI!=null&&T.roster&&T.roster[PI]!=null)?athById[T.roster[PI]]:null;
+    let p='<p>'+tLink(T.id)+' '+pick(['are reportedly thin','have a question mark','look light'],i)+' at <b>'+esc(pos)+'</b>.';
+    if(st)p+=' '+aLink(st.id)+' holds the spot'+(st.matches>0?' ('+avgRating(st.rating,st.matches)+' rating)':'')+', but the depth behind looks shallow.';
+    if(T.finance)p+=' A transfer budget of '+money(T.finance.transfer_budget)+' gives the front office room to act.';
+    return p+'</p>';}
+  return null;}
+function synthSeason(it,i){const T=teamBind(it,'Team')||teamByName[String(bindVal(it,'TeamName')||'').toLowerCase()];if(!T)return null;
+  const r=teamRank(T.id),l=leagueById[T.league_id];
+  let p='<p>'+tLink(T.id)+' '+pick(['open a fresh chapter','set their sights ahead','look to climb'],i)+(l?' in '+esc(l.name):'')+'.';
+  if(r)p+=' They sit '+rankPhrase(r)+' on a '+recStr(r)+' record.';
+  const prize=l&&l.prize_pool?l.prize_pool.reduce((x,y)=>x+y,0):0,pm=money(prize);if(prize>0&&pm!=='$0')p+=' The league carries a '+pm+' prize pool.';
+  p+='</p>';
+  if(T.rank_hist&&T.rank_hist.length>=2){const cur=T.rank_hist[T.rank_hist.length-1],d=T.rank_hist[0]-cur;
+    p+='<p>'+(d>0?'Trending up — ':d<0?'Slipping — ':'Holding steady — ')+esc(T.name)+(d?(' have moved '+Math.abs(d)+' place'+(Math.abs(d)>1?'s':'')+(d>0?' up':' down')+' since the trend window opened.'):' have held their position.')+'</p>';}
+  return p;}
+// Fallback: the game's own (spacing-fixed) body, with bind-named entities linked.
+function linkifyNews(text,it){let h=esc(text);const subs=[];
+  ['Team','EnemyTeam','SellTeam','BuyTeam','MyTeam','TeamName'].forEach(k=>{const v=bindVal(it,k);if(v&&teamByName[String(v).toLowerCase()])subs.push([v,tLink(teamByName[String(v).toLowerCase()].id)]);});
+  const a=athBind(it);if(a)subs.push([a.name,aLink(a.id)]);
+  subs.sort((x,y)=>String(y[0]).length-String(x[0]).length).forEach(([nm,link])=>{h=h.split(esc(nm)).join(link);});
+  return h;}
+function articleBody(it,i){i=i||0;const sc=newsScope(it);let h=null;
+  if(sc==='match_report'||sc==='match')h=synthMatch(it,i);
+  else if(sc==='pre_match'||sc==='pre_match_analysis')h=synthPreMatch(it,i);
+  else if(sc==='player')h=synthPlayer(it,i);
+  else if(sc==='transfer'||sc==='transfer_gossip'||sc==='recruit_to_other_team'||sc==='end_recruit')h=synthTransfer(it,i);
+  else if(sc==='season'||sc==='international_seed')h=synthSeason(it,i);
+  if(h)return h;
+  const g=resolveBody(it);
+  if(g)return linkifyNews(g,it).split(/\n+/).map(s=>s.trim()).filter(Boolean).map(s=>'<p>'+s+'</p>').join('');
+  return null;}
+function articleExcerpt(it,i){
+  // Drop crest/badge/avatar spans first — their initials are TEXT, so a bare stripTags
+  // would leave "DGDead Game"; the logo (.cico) / sprite (.spr) spans hold no text.
+  const h=String(articleBody(it,i)||resolveNews(it)||'').replace(/<span class="(?:crest|badge|avatar)[^"]*"[^>]*>[^<]*<\/span>/g,'');
+  return clip(stripTags(h),190);}
 function clip(s,n){s=String(s||'');return s.length>n?s.slice(0,n-1).replace(/\s+\S*$/,'')+'…':s;}
-const OFFICE_TAGS={transfer:'Transfer',match:'Match',pre_match:'Preview',meta:'Meta',player:'Player',fan:'Fans',finance:'Finance',scout:'Scouting',training:'Training',facility:'Facility',league:'League',season:'Season',merch:'Merch',author:'Op-Ed',start_team:'League',start_recruit:'Recruiting',solo_rank_report:'Solo Rank'};
+const OFFICE_TAGS={transfer:'Transfer',transfer_gossip:'Transfer',recruit_to_other_team:'Transfer',match:'Match',match_report:'Match',pre_match:'Preview',pre_match_analysis:'Preview',meta:'Meta',player:'Player',fan:'Fans',finance:'Finance',scout:'Scouting',training:'Training',training_report:'Training',facility:'Facility',league:'League',international_seed:'League',season:'Season',merch:'Merch',author:'Op-Ed',decision:'Roster',start_team:'League',start_recruit:'Recruiting',end_recruit:'Recruiting',solo_rank_report:'Solo Rank',alert:'Alert'};
 function deskOffice(limit){if(!window.NEWS_TEXT||!D.news||!D.news.length)return [];const out=[];
   for(let idx=0;idx<D.news.length;idx++){const it=D.news[idx],head=resolveNews(it);if(!head)continue;
-    const seg=it.title.split('.'),scope=seg[0]==='article'?seg[1]:seg[0];
-    out.push({head,body:resolveBody(it),by:it.by,date:it.date,tag:OFFICE_TAGS[scope]||'League',idx});
+    out.push({head,body:articleExcerpt(it,idx),by:it.by,date:it.date,tag:OFFICE_TAGS[newsScope(it)]||'League',idx});
     if(out.length>=limit)break;}
   return out;}
 function vNews(){
@@ -351,12 +444,11 @@ function vNews(){
   mount(h);
 }
 function vArticle(i){const it=D.news&&D.news[+i];if(!it)return mount('<h1>Article not found</h1><p class="sub"><a href="#/news">← Back to the Newsroom</a></p>');
-  const head=resolveNews(it)||'(untitled)',body=resolveBody(it);
-  const seg=it.title.split('.'),scope=seg[0]==='article'?seg[1]:seg[0];
+  const head=resolveNews(it)||'(untitled)',body=articleBody(it,+i);
   let h='<p class="sub"><a href="#/news">← Newsroom</a></p>';
-  h+='<span class="ntag">'+esc(OFFICE_TAGS[scope]||'League')+'</span><h1>'+esc(head)+'</h1>';
+  h+='<span class="ntag">'+esc(OFFICE_TAGS[newsScope(it)]||'League')+'</span><h1>'+esc(head)+'</h1>';
   h+='<p class="byline">— '+esc(it.by)+(it.date?' · '+esc(it.date):'')+'</p>';
-  h+=body?('<p class="article-body">'+esc(body)+'</p>'):'<p class="sub">No further detail on the wire.</p>';
+  h+=body?('<div class="article-body">'+body+'</div>'):'<p class="sub">No further detail on the wire.</p>';
   if(it.team!=null&&teamById[it.team])h+='<p>Related: '+tLink(it.team)+'</p>';
   mount(h);
 }
