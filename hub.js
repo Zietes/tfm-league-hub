@@ -245,6 +245,25 @@ function champMeta(c){if(!c.games||!c.picks)return null;const minGames=Math.max(
 // Tiers are RELATIVE (quantile cut-offs) so they self-calibrate to roster size /
 // game count instead of using absolute presence thresholds.
 const TIER_CUTS=[['S',0.08],['A',0.25],['B',0.50],['C',0.80],['D',1.01]];
+// ===== champion definitions (window.CHAMP_DATA from champ_data.js — hosted-site-only static
+// game data: base stats + ability kits + descriptions). Absent in-game → kit sections hide. =====
+function champDef(name){return (window.CHAMP_DATA&&window.CHAMP_DATA.info&&window.CHAMP_DATA.info[name])||null;}
+function champDesc(name){return (window.CHAMP_DATA&&window.CHAMP_DATA.desc&&window.CHAMP_DATA.desc[name])||null;}
+function champCat(c){const m=window.CHAMP_DATA&&window.CHAMP_DATA.cat;return (m&&m[String(c).toLowerCase()])||c;}
+const CHAMP_STAT={attack:'Attack',hp:'HP',defence:'Armor',magic_resistance:'Magic Resist',magic_power:'Ability Power',move_speed:'Move Speed',crit_chance:'Crit Chance',hp_regen:'HP Regen'};
+const ABIL_SLOTS=[['attack','Basic Attack'],['skill','Skill 1'],['skill2','Skill 2'],['ult','Ultimate']];
+const ABIL_EFFECTS=[['stun','Stun'],['airborne','Knock-up'],['knockback','Knockback'],['slow','Slow'],['shield','Shield'],['heal','Heal'],['silence','Silence'],['taunt','Taunt'],['fear','Fear'],['charm','Charm'],['bind','Root'],['banish','Banish'],['seal','Seal'],['invisible','Stealth'],['vamp','Lifesteal'],['lifesteal','Lifesteal'],['bleed','Bleed'],['burn','Burn'],['poison','Poison'],['dot','DoT']];
+function abilEffects(a){const out=[],seen={},ks=Object.keys(a);for(const e of ABIL_EFFECTS){if(seen[e[1]])continue;if(ks.some(k=>k.indexOf(e[0])>=0)){out.push(e[1]);seen[e[1]]=1;if(out.length>=4)break;}}return out;}
+// Fill the reliably-mappable placeholders (Damage/Coef/Range from the ability's own fields), strip the
+// game's inline markup, and gracefully drop any remaining bespoke placeholder (game fills those via
+// per-ability logic we can't reproduce) → an ellipsis so the prose never shows raw braces.
+function resolveAbility(d,a){if(!d)return '';let t=String(d);
+  const sub={Damage:a.attack,Coef:a.attack_ratio,Attack:a.attack,AttackRatio:a.attack_ratio,Range:a.range!=null?Math.round(a.range/1000):null,AttackRange:a.attack_range!=null?Math.round(a.attack_range/1000):null};
+  for(const k in sub)if(sub[k]!=null)t=t.split('{'+k+'}').join(sub[k]);
+  t=stripTags(t).replace(/\{[A-Za-z]+\}/g,'…');
+  return t.replace(/\s+([.,)%])/g,'$1').replace(/\(\s+/g,'(').replace(/\s{2,}/g,' ').trim();}
+function abilChips(a){const c=[];if(a.cooltime)c.push(['CD',(a.cooltime/60).toFixed(a.cooltime%60?1:0)+'s']);
+  if(a.attack)c.push(['Power',a.attack]);if(a.attack_ratio)c.push(['Ratio',a.attack_ratio+'%']);if(a.range)c.push(['Range',Math.round(a.range/1000)]);return c;}
 function vTierList(){const ranked=D.champions.map(c=>({c,m:champMeta(c)})).filter(x=>x.m).sort((a,b)=>b.m.score-a.m.score);
   if(ranked.length<2)return '';const n=ranked.length,buckets={};
   ranked.forEach((x,i)=>{const q=(i+1)/n,t=(TIER_CUTS.find(c=>q<=c[1])||TIER_CUTS[TIER_CUTS.length-1])[0];(buckets[t]=buckets[t]||[]).push(x);});
@@ -252,12 +271,30 @@ function vTierList(){const ranked=D.champions.map(c=>({c,m:champMeta(c)})).filte
   for(const [t] of TIER_CUTS){const row=buckets[t];if(!row||!row.length)continue;
     h+='<div class="tier"><span class="tlab tier-'+t+'">'+t+'</span><span class="tch">'+row.map(x=>'<span class="tchip" title="presence '+x.m.pres.toFixed(0)+'% · win '+x.m.wr.toFixed(0)+'%"><a href="#/champion/'+encodeURIComponent(x.c.name)+'">'+champIcon(x.c.name,30,true,'show')+esc(champName(x.c.name))+'</a></span>').join('')+'</span></div>';}
   return h;}
-function vChampions(){const g=D.champions[0]?D.champions[0].games:0;let h='<h1>Champions</h1><p class="sub">pick/ban/win over last '+g+' games · click to sort</p>'+vTierList()+'<table class="s"><thead><tr><th>Champion</th><th data-num>Picks</th><th data-num>Pick%</th><th data-num>Bans</th><th data-num>Ban%</th><th data-num>Pres%</th><th data-num>Win%</th></tr></thead><tbody>';
-  D.champions.forEach(c=>{const pr=c.games?100*(c.picks+c.bans)/c.games:0;h+='<tr><td>'+cLink(c.name,40)+'</td><td class="num">'+c.picks+'</td><td class="num" data-s="'+(c.games?c.picks/c.games:0)+'">'+pct(c.picks,c.games)+'</td><td class="num">'+c.bans+'</td><td class="num" data-s="'+(c.games?c.bans/c.games:0)+'">'+pct(c.bans,c.games)+'</td><td class="num" data-s="'+pr+'">'+pr.toFixed(1)+'%</td><td class="num" data-s="'+(c.picks?c.wins/c.picks:0)+'">'+pct(c.wins,c.picks)+'</td></tr>';});
+function vChampions(){const g=D.champions[0]?D.champions[0].games:0;
+  // List ALL available champions (from the bundle defs), merged with match meta where it exists.
+  let names=window.CHAMP_DATA&&window.CHAMP_DATA.info?Object.keys(window.CHAMP_DATA.info):[];
+  D.champions.forEach(c=>{if(names.indexOf(c.name)<0)names.push(c.name);});
+  if(!names.length)names=D.champions.map(c=>c.name);
+  const rows=names.map(n=>champByName[n]||{name:n,picks:0,bans:0,wins:0,games:g});
+  rows.sort((a,b)=>(b.picks+b.bans)-(a.picks+a.bans)||a.name.localeCompare(b.name));
+  let h='<h1>Champions</h1><p class="sub">'+rows.length+' champions · click one for its full kit · pick/ban/win over last '+g+' games · click a column to sort</p>'+vTierList()
+    +'<table class="s"><thead><tr><th>Champion</th><th>Class</th><th data-num>Picks</th><th data-num>Pick%</th><th data-num>Bans</th><th data-num>Ban%</th><th data-num>Win%</th></tr></thead><tbody>';
+  rows.forEach(c=>{const def=champDef(c.name);
+    h+='<tr><td>'+cLink(c.name,40)+'</td><td class="sub">'+(def?esc(champCat(def.category)):'—')+'</td><td class="num">'+c.picks+'</td><td class="num" data-s="'+(c.games?c.picks/c.games:0)+'">'+(c.picks?pct(c.picks,c.games):'—')+'</td><td class="num">'+c.bans+'</td><td class="num" data-s="'+(c.games?c.bans/c.games:0)+'">'+(c.bans?pct(c.bans,c.games):'—')+'</td><td class="num" data-s="'+(c.picks?c.wins/c.picks:0)+'">'+(c.picks?pct(c.wins,c.picks):'—')+'</td></tr>';});
   mount(h+'</tbody></table>');}
-function vChampion(name){const c=champByName[name];
+function vChampion(name){const c=champByName[name];const def=champDef(name);const dsc=champDesc(name);
   const stats=c?[statCell('Games',c.games),statCell('Pick%',pct(c.picks,c.games)),statCell('Ban%',pct(c.bans,c.games)),statCell('Win%',pct(c.wins,c.picks),c.picks&&c.wins/c.picks>=0.5?'pos':(c.picks?'neg':''))]:[];
-  let h=heroHeader(champIcon(name,74,true,'bare'),'Champion',esc(champName(name)),null,stats);
+  const sub=def?(esc(champCat(def.category))+(def.tags&&def.tags.length?'  ·  '+def.tags.map(esc).join(' / '):'')):null;
+  let h=heroHeader(champIcon(name,74,true,'bare'),'Champion',esc((dsc&&dsc.name)||champName(name)),sub,stats);
+  if(def){h+='<h2>Abilities</h2><div class="kit">';
+    ABIL_SLOTS.forEach(([slot,lbl])=>{const a=def[slot];if(!a)return;const d=dsc?dsc[slot]:'';const eff=abilEffects(a),chips=abilChips(a);
+      h+='<div class="abil'+(slot==='ult'?' ult-card':'')+'"><div class="abil-h"><span class="abil-slot '+slot+'">'+lbl+'</span>'+(eff.length?'<span class="abil-eff">'+eff.map(e=>'<span class="etag">'+esc(e)+'</span>').join('')+'</span>':'')+'</div>'
+        +(d?'<p class="abil-d">'+esc(resolveAbility(d,a))+'</p>':'')
+        +(chips.length?'<div class="abil-chips">'+chips.map(x=>'<span class="achip"><span class="al">'+x[0]+'</span><span class="av">'+x[1]+'</span></span>').join('')+'</div>':'')+'</div>';});
+    h+='</div>';
+    h+='<h2>Base Stats <small>level 1 · +growth per level</small></h2><table class="s"><thead><tr><th>Stat</th><th data-num>Base</th><th data-num>Growth</th></tr></thead><tbody>'
+      +Object.keys(CHAMP_STAT).filter(f=>def.stat[f]||def.growth[f]).map(f=>'<tr><td>'+CHAMP_STAT[f]+'</td><td class="num"><b>'+(def.stat[f]||0)+'</b></td><td class="num sub">'+(def.growth[f]?'+'+def.growth[f]:'—')+'</td></tr>').join('')+'</tbody></table>';}
   if(c){let rr='';for(let i=0;i<5;i++){if(c.role_picks[i]>0)rr+='<tr><td>'+POS[i]+'</td><td class="num">'+c.role_picks[i]+'</td><td class="num">'+pct(c.role_wins[i],c.role_picks[i])+'</td></tr>';}
     if(rr)h+='<h2>By role</h2><table class="s"><thead><tr><th>Role</th><th data-num>Picks</th><th data-num>Win%</th></tr></thead><tbody>'+rr+'</tbody></table>';}
   const players={};D.matches.forEach(m=>m.picks.forEach(p=>{if(p.champion==name)players[p.athlete_id]=(players[p.athlete_id]||0)+1;}));
