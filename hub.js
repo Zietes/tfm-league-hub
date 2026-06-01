@@ -96,7 +96,10 @@ function itemIcon(i,size){size=size||24;const r=window.ITEM_ICONS&&window.ITEM_I
   return '<span class="iico" style="width:'+(r[2]*s).toFixed(1)+'px;height:'+size+'px;background-image:url(\''+(window.ICON_BASE||'')+window.ITEM_SHEET_URL+'\');background-size:'+(window.ITEM_SW*s).toFixed(1)+'px '+(window.ITEM_SH*s).toFixed(1)+'px;background-position:'+(-r[0]*s).toFixed(1)+'px '+(-r[1]*s).toFixed(1)+'px"></span>';}
 // Facility/stadium grade enum index -> letter (confirmed in-game: A=3, S=4).
 const grade=i=>['D','C','B','A','S'][i]||('Lv '+i);
-const money=v=>{v=+v||0;const s=v<0?'-':'';v=Math.abs(v);if(v>=1e9)return s+'$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return s+'$'+(v/1e6).toFixed(1)+'M';if(v>=1e3)return s+'$'+(v/1e3).toFixed(0)+'K';return s+'$'+v.toFixed(0);};
+// The game stores all currency at 1000x the displayed amount (verified in-game: a raw
+// balance of 24,997,124,341 shows as ~$25M), so scale down before formatting. EVERY money
+// value (balances, budgets, prize pools, transfer fees, salaries) goes through here.
+const money=v=>{v=(+v||0)/1000;const s=v<0?'-':'';v=Math.abs(v);if(v>=1e9)return s+'$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return s+'$'+(v/1e6).toFixed(1)+'M';if(v>=1e3)return s+'$'+(v/1e3).toFixed(1)+'K';return s+'$'+v.toFixed(0);};
 const POS=['Top','Jungle','Mid','Bot','Sup'];
 const ATTR_DEFS=[['Monster Kills','last_hit'],['Skill Dodge','skill_avoid'],['Skill Hit','skill_hit'],['Control Speed','control_speed'],['Positioning','positioning'],['Judgment','judgement'],['Mental','mental'],['Focus','concentration'],['Calls','order'],['Roaming','roaming'],['Aggression','aggressive'],['Ego','ego']];
 function makeSortable(t){[...t.tHead.rows[0].cells].forEach((th,i)=>{if('nosort' in th.dataset)return;th.style.cursor='pointer';
