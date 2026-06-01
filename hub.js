@@ -306,15 +306,26 @@ function deskPlayers(limit){const out=[];const e=D.athletes.filter(a=>a.matches>
   const m=[...e].sort((a,b)=>b.mvp-a.mvp)[0];if(m&&m.mvp>0&&(!por||m.id!==por.id))out.push({head:m.name+' is collecting hardware',blurb:m.name+' has claimed '+m.mvp+' MVP'+(m.mvp>1?'s':'')+' so far this season.',tag:'Player',link:'#/player/'+m.id,score:62,desk:'Player Spotlight'});
   const k=[...e].filter(a=>a.deaths>0).sort((a,b)=>((b.kills+b.assists)/b.deaths)-((a.kills+a.assists)/a.deaths))[0];if(k&&(!por||k.id!==por.id)&&(!m||k.id!==m.id))out.push({head:k.name+' is nearly unkillable',blurb:k.name+' sports a league-best '+((k.kills+k.assists)/k.deaths).toFixed(1)+' KDA.',tag:'Player',link:'#/player/'+k.id,score:50,desk:'Player Spotlight'});
   return out.slice(0,limit);}
+// Game-native news: resolve a title key against window.NEWS_TEXT + substitute {binds}.
+function newsText(key){let o=window.NEWS_TEXT;if(!o)return null;for(const k of String(key).split('.')){if(o==null)return null;o=o[k];}return typeof o==='string'?o:null;}
+function resolveNews(it){let t=newsText(it.title);if(t==null)return null;(it.tb||[]).forEach(p=>{t=t.split('{'+p[0]+'}').join(p[1]);});return t;}
+const OFFICE_TAGS={transfer:'Transfer',match:'Match',pre_match:'Preview',meta:'Meta',player:'Player',fan:'Fans',finance:'Finance',scout:'Scouting',training:'Training',facility:'Facility',league:'League',season:'Season',merch:'Merch',author:'Op-Ed',start_team:'League',start_recruit:'Recruiting',solo_rank_report:'Solo Rank'};
+function deskOffice(limit){if(!window.NEWS_TEXT||!D.news||!D.news.length)return [];const out=[];
+  for(const it of D.news){const head=resolveNews(it);if(!head)continue;const seg=it.title.split('.');const scope=seg[0]==='article'?seg[1]:seg[0];
+    out.push({head,blurb:'— '+it.by+(it.date?' · '+it.date:''),tag:OFFICE_TAGS[scope]||'League',link:it.team!=null?'#/team/'+it.team:'#/news'});
+    if(out.length>=limit)break;}
+  return out;}
 function vNews(){
   const R=deskResults(4),S=deskStandings(4),M=deskMeta(3),P=deskPlayers(3),all=[...R,...S,...M,...P];
   let lead=null;all.forEach(s=>{if(!lead||s.score>lead.score)lead=s;});
-  let h=heroHeader('','Newsroom','The League Wire','Reports from across the leagues · #'+(D.updated||0),[]);
+  let h=heroHeader('','Newsroom','The League Wire','Reports from across the leagues · '+(D.today||('#'+(D.updated||0))),[]);
   if(!all.length)h+='<p class="sub">No stories yet — play out some matches and the desks will fill in.</p>';
   if(lead)h+='<a class="lead-story" href="'+lead.link+'"><span class="ntag '+(lead.cls||'')+'">'+lead.tag+'</span><div class="lead-h">'+esc(lead.head)+'</div><p>'+esc(lead.blurb)+'</p><span class="byline">— The '+lead.desk+' Desk</span></a>';
   const card=s=>'<a class="ncard" href="'+s.link+'"><span class="ntag '+(s.cls||'')+'">'+s.tag+'</span><div class="nhead">'+esc(s.head)+'</div><div class="nblurb">'+esc(s.blurb)+'</div></a>';
   const desk=(title,route,list)=>{const ls=list.filter(s=>s!==lead).slice(0,3);if(!ls.length)return '';return '<section class="ndesk"><div class="ndesk-h"><h2>'+title+'</h2><a class="more" href="'+route+'">more →</a></div>'+ls.map(card).join('')+'</section>';};
   h+='<div class="nroom">'+desk('Results','#/matches',R)+desk('Standings','#/standings',S)+desk('Meta Watch','#/champions',M)+desk('Player Spotlight','#/players',P)+'</div>';
+  const office=deskOffice(8);
+  if(office.length)h+='<section class="ndesk office"><div class="ndesk-h"><h2>From the League Office <small>straight off the game wire</small></h2></div><div class="owrap">'+office.map(card).join('')+'</div></section>';
   mount(h);
 }
 function vSearch(q){q=String(q||'').toLowerCase();
