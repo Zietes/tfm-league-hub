@@ -105,7 +105,7 @@ function makeSortable(t){[...t.tHead.rows[0].cells].forEach((th,i)=>{if('nosort'
     rows.forEach(r=>tb.appendChild(r));};});}
 function mount(html){const app=document.getElementById('app');app.innerHTML=html;app.querySelectorAll('table.s').forEach(makeSortable);}
 function nav(){document.getElementById('nav').innerHTML='<span class="brand">🏆 League Hub</span>'+
-  '<a href="#/">Standings</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/matches">Matches</a>'+
+  '<a href="#/">Standings</a><a href="#/news">News</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/matches">Matches</a>'+
   '<input id="q" placeholder="Search teams, players, champions…"><span class="upd">#'+(D.updated||0)+'</span>';
   const q=document.getElementById('q');q.oninput=()=>{const v=q.value.trim();location.hash=v?('#/search/'+encodeURIComponent(v)):'#/';};}
 function statCell(l,v,cls){return '<div><span class="l">'+esc(l)+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>';}
@@ -268,6 +268,55 @@ function vMatch(id){const m=D.matches.find(x=>x.id==id);if(!m)return mount('<h1>
     return '<h2>'+tLink(b?m.blue_team_id:m.red_team_id,28)+(b===bw?' <span class="win">(won)</span>':'')+'</h2><table><thead><tr><th>Role</th><th>Player</th><th>Champion</th><th class="num">K</th><th class="num">D</th><th class="num">Dmg</th><th class="num">CS</th><th>Items</th></tr></thead><tbody>'+
       ps.map(p=>'<tr><td>'+roleTag(p.position)+'</td><td>'+aLink(p.athlete_id,40)+'</td><td>'+cLink(p.champion,40)+'</td><td class="num">'+(p.kills||0)+'</td><td class="num">'+(p.deaths||0)+'</td><td class="num">'+(p.deal||0).toLocaleString()+'</td><td class="num">'+(p.cs||0)+'</td><td class="chips">'+((p.items||[]).map(i=>{const ic=itemIcon(i,26);return ic?'<span class="ichip" title="'+esc(itemName(i))+'">'+ic+'</span>':'<span>'+esc(itemName(i))+'</span>';}).join('')||'<span class="sub">—</span>')+'</td></tr>').join('')+'</tbody></table>';};
   mount(h+side(true)+side(false));}
+// ===== Newsroom: synthesized "reporter" stories from the exported data =====
+function teamRank(tid){for(const c of D.competitions){const i=c.standings.findIndex(s=>s.team_id==tid);if(i>=0)return {rank:i+1,n:c.standings.length,s:c.standings[i]};}return null;}
+function teamForm(tid,n){const r=[];for(const m of D.matches){if(m.blue_team_id==tid||m.red_team_id==tid){r.push((m.blue_team_id==tid)===m.blue_win);if(r.length>=n)break;}}return r;}
+function streak(f){if(!f.length)return '';let s=1;for(let i=1;i<f.length;i++){if(f[i]===f[0])s++;else break;}return s>=2?(s+(f[0]?'-game win streak':'-game skid')):'';}
+function deskResults(limit){
+  const cand=D.matches.slice(0,40).map(m=>{const wT=m.blue_win?m.blue_team_id:m.red_team_id,lT=m.blue_win?m.red_team_id:m.blue_team_id;
+    const wp=m.blue_win?(m.blue_perf||{}):(m.red_perf||{}),lp=m.blue_win?(m.red_perf||{}):(m.blue_perf||{});
+    const kd=(wp.kills||0)-(lp.kills||0),gd=(wp.total_gold||0)-(lp.total_gold||0);
+    const wR=teamRank(wT),lR=teamRank(lT),upset=!!(wR&&lR&&wR.rank>=lR.rank+3);
+    let mvp=null,best=-1;m.picks.filter(p=>p.blue===m.blue_win).forEach(p=>{const sc=(p.kills||0)*2+(p.deal||0)/1500-(p.deaths||0);if(sc>best){best=sc;mvp=p;}});
+    return {m,wT,lT,kd,gd,upset,mvp,score:(upset?120:0)+kd*3+gd/1200};});
+  const UPV=['stun','shock','topple','ambush'],DOMV=['demolish','dismantle','run over','steamroll'],EDGV=['edge','squeak past','outlast','hold off'];
+  const UPB=['pulled off the upset against','sent shockwaves through the league by beating','had no business beating — yet took down','pulled the rug out from under'];
+  const pick=(arr,i)=>arr[i%arr.length];
+  return cand.sort((a,b)=>b.score-a.score).slice(0,limit).map((s,i)=>{
+    const w=tName(s.wT),l=tName(s.lT);
+    const head=s.upset?(w+' '+pick(UPV,i)+' '+l):(w+' '+pick(s.kd>=10?DOMV:EDGV,i)+' '+l);
+    let blurb=s.upset?(w+' '+pick(UPB,i)+' '+l):(w+' '+(s.kd>=10?'overpowered':'got past')+' '+l);
+    if(s.mvp){const a=athById[s.mvp.athlete_id];blurb+=', powered by '+(a?a.name:'a standout')+'’s '+(s.mvp.kills||0)+' kills on '+champName(s.mvp.champion);}
+    return {head,blurb:blurb+'.',tag:s.upset?'Upset':'Result',cls:s.upset?'up':'',link:'#/match/'+s.m.id,score:s.score,desk:'Results'};});
+}
+function deskStandings(limit){const out=[];
+  D.leagues.forEach(l=>{const c=(compsByLeague[l.id]||[])[0];if(c&&c.standings[0]){const s=c.standings[0],st=streak(teamForm(s.team_id,6));
+    out.push({head:tName(s.team_id)+' top '+l.name,blurb:tName(s.team_id)+' sit atop '+l.name+' at '+s.win+'–'+s.lose+(st?', riding a '+st:'')+'.',tag:'Standings',link:'#/league/'+l.id,score:40+s.points/5,desk:'Standings'});}});
+  D.teams.forEach(t=>{if(t.rank_hist&&t.rank_hist.length>=2){const cur=t.rank_hist[t.rank_hist.length-1],d=t.rank_hist[t.rank_hist.length-2]-cur;if(Math.abs(d)>=2)
+    out.push({head:tName(t.id)+(d>0?' on the rise':' stumbling'),blurb:tName(t.id)+' '+(d>0?'climbed':'dropped')+' '+Math.abs(d)+' place'+(Math.abs(d)>1?'s':'')+' to #'+cur+' in the table.',tag:'Mover',cls:d>0?'up':'',link:'#/team/'+t.id,score:55+Math.abs(d)*4,desk:'Standings'});}});
+  return out.sort((a,b)=>b.score-a.score).slice(0,limit);}
+function deskMeta(limit){const out=[];const g=D.champions[0]?D.champions[0].games:0;if(!g)return out;const minS=Math.max(3,g*0.05);
+  const b=[...D.champions].sort((x,y)=>y.bans-x.bans)[0];if(b&&b.bans>0)out.push({head:champName(b.name)+' rules the ban phase',blurb:champName(b.name)+' is the most-contested champion, removed in '+pct(b.bans,g)+' of drafts over the last '+g+' games.',tag:'Meta',link:'#/champion/'+encodeURIComponent(b.name),score:85,desk:'Meta Watch'});
+  const wr=D.champions.filter(c=>c.picks>=minS).sort((x,y)=>(y.wins/y.picks)-(x.wins/x.picks))[0];if(wr)out.push({head:champName(wr.name)+' is quietly dominating',blurb:champName(wr.name)+' holds a '+pct(wr.wins,wr.picks)+' win rate across '+wr.picks+' games — best among regulars.',tag:'Meta',link:'#/champion/'+encodeURIComponent(wr.name),score:75,desk:'Meta Watch'});
+  const p=[...D.champions].sort((x,y)=>y.picks-x.picks)[0];if(p&&(!wr||p.name!==wr.name))out.push({head:champName(p.name)+' is the meta staple',blurb:champName(p.name)+' leads in raw picks ('+p.picks+'), a near-permanent fixture of team comps.',tag:'Meta',link:'#/champion/'+encodeURIComponent(p.name),score:65,desk:'Meta Watch'});
+  return out.slice(0,limit);}
+function deskPlayers(limit){const out=[];const e=D.athletes.filter(a=>a.matches>=3);
+  const por=[...e].sort((a,b)=>(b.rating/(b.matches*10))-(a.rating/(a.matches*10)))[0];
+  if(por)out.push({head:por.name+' is in MVP form',blurb:por.name+(por.team_id!=null?' of '+tName(por.team_id):'')+' tops the league with a '+avgRating(por.rating,por.matches)+' average rating across '+por.matches+' games.',tag:'Player',link:'#/player/'+por.id,score:80,desk:'Player Spotlight'});
+  const m=[...e].sort((a,b)=>b.mvp-a.mvp)[0];if(m&&m.mvp>0&&(!por||m.id!==por.id))out.push({head:m.name+' is collecting hardware',blurb:m.name+' has claimed '+m.mvp+' MVP'+(m.mvp>1?'s':'')+' so far this season.',tag:'Player',link:'#/player/'+m.id,score:62,desk:'Player Spotlight'});
+  const k=[...e].filter(a=>a.deaths>0).sort((a,b)=>((b.kills+b.assists)/b.deaths)-((a.kills+a.assists)/a.deaths))[0];if(k&&(!por||k.id!==por.id)&&(!m||k.id!==m.id))out.push({head:k.name+' is nearly unkillable',blurb:k.name+' sports a league-best '+((k.kills+k.assists)/k.deaths).toFixed(1)+' KDA.',tag:'Player',link:'#/player/'+k.id,score:50,desk:'Player Spotlight'});
+  return out.slice(0,limit);}
+function vNews(){
+  const R=deskResults(4),S=deskStandings(4),M=deskMeta(3),P=deskPlayers(3),all=[...R,...S,...M,...P];
+  let lead=null;all.forEach(s=>{if(!lead||s.score>lead.score)lead=s;});
+  let h=heroHeader('','Newsroom','The League Wire','Reports from across the leagues · #'+(D.updated||0),[]);
+  if(!all.length)h+='<p class="sub">No stories yet — play out some matches and the desks will fill in.</p>';
+  if(lead)h+='<a class="lead-story" href="'+lead.link+'"><span class="ntag '+(lead.cls||'')+'">'+lead.tag+'</span><div class="lead-h">'+esc(lead.head)+'</div><p>'+esc(lead.blurb)+'</p><span class="byline">— The '+lead.desk+' Desk</span></a>';
+  const card=s=>'<a class="ncard" href="'+s.link+'"><span class="ntag '+(s.cls||'')+'">'+s.tag+'</span><div class="nhead">'+esc(s.head)+'</div><div class="nblurb">'+esc(s.blurb)+'</div></a>';
+  const desk=(title,route,list)=>{const ls=list.filter(s=>s!==lead).slice(0,3);if(!ls.length)return '';return '<section class="ndesk"><div class="ndesk-h"><h2>'+title+'</h2><a class="more" href="'+route+'">more →</a></div>'+ls.map(card).join('')+'</section>';};
+  h+='<div class="nroom">'+desk('Results','#/matches',R)+desk('Standings','#/standings',S)+desk('Meta Watch','#/champions',M)+desk('Player Spotlight','#/players',P)+'</div>';
+  mount(h);
+}
 function vSearch(q){q=String(q||'').toLowerCase();
   const tm=D.teams.filter(t=>t.name.toLowerCase().includes(q)).slice(0,40);
   const pl=D.athletes.filter(a=>a.name.toLowerCase().includes(q)).slice(0,60);
@@ -276,10 +325,10 @@ function vSearch(q){q=String(q||'').toLowerCase();
   h+='<h2>Players</h2><div class="chips">'+(pl.map(a=>'<span>'+aLink(a.id)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   h+='<h2>Champions</h2><div class="chips">'+(ch.map(c=>'<span>'+cLink(c.name)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';mount(h);}
 function setActiveNav(){const seg=location.hash.replace(/^#\/?/,'').split('/')[0]||'';
-  const m={'':'#/',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players',champions:'#/champions',champion:'#/champions',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
+  const m={'':'#/',news:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players',champions:'#/champions',champion:'#/champions',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
   const want=m[seg]||'#/';document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')===want));}
 function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);
-  switch(p[0]){case '':return vStandings();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
+  switch(p[0]){case '':return vStandings();case 'news':return vNews();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
     case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'champions':return vChampions();
     case 'champion':return vChampion(p.slice(1).join('/'));case 'matches':return vMatches();case 'match':return vMatch(+p[1]);
     case 'leagues':return vLeagues();case 'league':return vLeague(+p[1]);

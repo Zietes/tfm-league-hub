@@ -105,6 +105,26 @@ h2{scroll-margin-top:66px}
 .cico.show,.tlogo.show{border-radius:var(--r-sm);border:1px solid var(--line2);
   background:radial-gradient(64% 64% at 50% 34%,#1b2333,#0c0f17)}
 .cico.bare,.tlogo.bare{background:transparent;border:0}
+/* newsroom — lead story + desk sections */
+.lead-story{display:block;background:linear-gradient(135deg,var(--surface),var(--bg2));border:1px solid var(--line);border-left:3px solid var(--ac);border-radius:var(--r);padding:18px 20px;margin:6px 0 20px;box-shadow:var(--sh);transition:.12s}
+.lead-story:hover{text-decoration:none;border-color:var(--acd);transform:translateY(-1px)}
+.lead-h{font-size:23px;font-weight:800;letter-spacing:-.01em;color:#fff;margin:9px 0 7px}
+.lead-story:hover .lead-h{color:var(--ac)}
+.lead-story p{color:var(--mut);margin:0 0 10px;font-size:14px;line-height:1.5}
+.byline{font:700 10.5px/1 var(--mono);color:var(--faint);text-transform:uppercase;letter-spacing:.12em}
+.nroom{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:680px){.nroom{grid-template-columns:1fr}}
+.ndesk{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px 16px;box-shadow:var(--sh)}
+.ndesk-h{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:4px}
+.ndesk-h h2{margin:0}
+.more{font:600 12px var(--sans);color:var(--link);white-space:nowrap}.more:hover{color:var(--ac);text-decoration:none}
+.ncard{display:block;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.ndesk .ncard:last-child{border-bottom:0}
+.ncard:hover{text-decoration:none}.ncard:hover .nhead{color:var(--ac)}
+.nhead{color:#fff;font-weight:700;font-size:14px;margin-bottom:3px;line-height:1.3}
+.nblurb{color:var(--mut);font-size:12.5px;line-height:1.45}
+.ntag{display:inline-block;font:700 9.5px/1 var(--mono);text-transform:uppercase;letter-spacing:.07em;color:var(--ac);background:rgba(70,200,255,.12);border:1px solid var(--acd);border-radius:4px;padding:3px 7px;margin-bottom:6px}
+.ntag.up{color:var(--gold);background:rgba(255,206,107,.12);border-color:var(--gold)}
 /* league switcher pills (standings landing) */
 .switch{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 20px}
 .switch a{cursor:pointer;padding:5px 12px;border-radius:999px;background:var(--surface2);
