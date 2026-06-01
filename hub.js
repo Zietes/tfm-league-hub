@@ -2,13 +2,15 @@
 let D=window.LEAGUE_DATA||{leagues:[],competitions:[],teams:[],athletes:[],matches:[],champions:[],items:[]};
 // Indices are rebuilt by buildIndex() so the hosted site can swap in fresh data
 // (applyData) without a full-page reload. ATTR_MAX is derived from the data too.
-let teamById={},athById={},leagueById={},champByName={},compsByLeague={},ATTR_MAX=1,teamByName={},athByName={},champStatById={};
+let teamById={},athById={},leagueById={},champByName={},compsByLeague={},ATTR_MAX=1,teamByName={},athByName={},champStatById={},squadByTeam={},poolKnown=false;
 function buildIndex(){
   D.items=D.items||[];
-  teamById={};athById={};leagueById={};champByName={};compsByLeague={};teamByName={};athByName={};champStatById={};
+  teamById={};athById={};leagueById={};champByName={};compsByLeague={};teamByName={};athByName={};champStatById={};squadByTeam={};
   (D.champ_stats||[]).forEach(c=>champStatById[c.id]=c); // live (post-patch) base stats from the running game
+  poolKnown=(D.champ_stats||[]).length>0; // do we know this season's active champion pool? (champ_stats keys = available_champions)
   D.teams.forEach(t=>{teamById[t.id]=t;teamByName[String(t.name).toLowerCase()]=t;});
-  D.athletes.forEach(a=>{athById[a.id]=a;athByName[String(a.name).toLowerCase()]=a;});
+  D.athletes.forEach(a=>{athById[a.id]=a;athByName[String(a.name).toLowerCase()]=a;
+    if(a.team_id!=null)(squadByTeam[a.team_id]=squadByTeam[a.team_id]||[]).push(a.id);}); // full squad incl. subs (accurate team_id)
   D.leagues.forEach(l=>leagueById[l.id]=l);D.champions.forEach(c=>champByName[c.name]=c);
   D.competitions.forEach(c=>{(compsByLeague[c.league_id]=compsByLeague[c.league_id]||[]).push(c);});
   ATTR_MAX=Math.max(1,...D.athletes.flatMap(a=>a.attr?ATTR_DEFS.map(d=>a.attr[d[1]]||0):[0]));
@@ -123,6 +125,15 @@ const grade=i=>['D','C','B','A','S'][i]||('Lv '+i);
 const money=v=>{v=(+v||0)/1000;const s=v<0?'-':'';v=Math.abs(v);if(v>=1e9)return s+'$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return s+'$'+(v/1e6).toFixed(1)+'M';if(v>=1e3)return s+'$'+(v/1e3).toFixed(1)+'K';return s+'$'+v.toFixed(0);};
 const POS=['Top','Jungle','Mid','Bot','Sup'];
 const ATTR_DEFS=[['Monster Kills','last_hit'],['Skill Dodge','skill_avoid'],['Skill Hit','skill_hit'],['Control Speed','control_speed'],['Positioning','positioning'],['Judgment','judgement'],['Mental','mental'],['Focus','concentration'],['Calls','order'],['Roaming','roaming'],['Aggression','aggressive'],['Ego','ego']];
+// best-played role from the role-proficiency block (a.pos), with its prof value.
+const POS_KEYS=['top','jungle','mid','bottom','support'];
+function bestPos(a){if(!a||!a.pos)return null;let bi=-1,bv=-1;POS_KEYS.forEach((k,i)=>{const v=a.pos[k]||0;if(v>bv){bv=v;bi=i;}});return bv>0?{idx:bi,val:bv}:null;}
+// Overall = mean of the 12 attributes — a sortable talent proxy for players with no match history (e.g. free agents).
+function ovr(a){if(!a||!a.attr)return 0;let s=0;for(const d of ATTR_DEFS)s+=a.attr[d[1]]||0;return Math.round(s/ATTR_DEFS.length);}
+// Is this champion in THIS season's active pool? champ_stats is built from available_champions, so its keys ARE
+// the pool. When champ_stats is absent (in-game broadcast page / pre-load) the pool is unknown → treat all as
+// available (no filtering, no regression).
+const inPool=n=>!poolKnown||!!champStatById[n];
 function makeSortable(t){[...t.tHead.rows[0].cells].forEach((th,i)=>{if('nosort' in th.dataset)return;th.style.cursor='pointer';
   th.onclick=()=>{const tb=t.tBodies[0];const rows=[...tb.rows];const dir=th._d=-(th._d||1);const num='num' in th.dataset;
     rows.sort((a,b)=>{let x=a.cells[i].dataset.s??a.cells[i].textContent,y=b.cells[i].dataset.s??b.cells[i].textContent;if(num){x=parseFloat(x)||0;y=parseFloat(y)||0;}else{x=(''+x).toLowerCase();y=(''+y).toLowerCase();}return x<y?dir:x>y?-dir:0;});
@@ -185,14 +196,16 @@ function vStandings(){
   c.standings.forEach((s,i)=>{const adj=s.adj?('<span class="'+(s.adj>0?'pos">+':'neg">')+s.adj+'</span>'):'';
     h+='<tr'+(i===0?' class="lead"':'')+'><td class="'+(i<3?'r'+(i+1):'')+'">'+(i+1)+'</td><td>'+tLink(s.team_id)+'</td><td class="num"><b>'+s.points+'</b></td><td class="num">'+s.win+'</td><td class="num">'+s.lose+'</td><td class="num">'+pct(s.win,s.win+s.lose)+'</td><td class="num">'+s.set_win+'</td><td class="num">'+s.set_lose+'</td><td class="num">'+s.kill+'</td><td class="num">'+adj+'</td></tr>';});
   h+='</tbody></table>';});});mount(h);}
-function vTeams(){let h='<h1>Teams</h1><table class="s"><thead><tr><th>Team</th><th>Manager</th><th>League</th><th data-num>Fans</th><th data-num>Balance</th></tr></thead><tbody>';
-  D.teams.forEach(t=>{const l=leagueById[t.league_id];h+='<tr><td>'+tLink(t.id,40)+'</td><td>'+esc(t.manager)+'</td><td>'+lLink(t.league_id)+'</td><td class="num" data-s="'+t.fan_count+'">'+t.fan_count.toLocaleString()+'</td><td class="num" data-s="'+t.balance+'">'+money(t.balance)+'</td></tr>';});
+function vTeams(){let h='<h1>Teams</h1><p class="sub">click a column to sort · '+D.teams.length+' clubs · Squad = full roster incl. subs, Bench = non-starters</p><table class="s"><thead><tr><th>Team</th><th>Manager</th><th>League</th><th data-num>Squad</th><th data-num>Bench</th><th data-num>Fans</th><th data-num>Balance</th></tr></thead><tbody>';
+  D.teams.forEach(t=>{const sq=(squadByTeam[t.id]||[]).length,starters=(t.roster||[]).filter(x=>x!=null).length,bench=Math.max(0,sq-starters);
+    h+='<tr><td>'+tLink(t.id,40)+'</td><td>'+esc(t.manager)+'</td><td>'+lLink(t.league_id)+'</td><td class="num" data-s="'+sq+'">'+sq+'</td><td class="num" data-s="'+bench+'">'+(bench||'<span class="sub">0</span>')+'</td><td class="num" data-s="'+t.fan_count+'">'+t.fan_count.toLocaleString()+'</td><td class="num" data-s="'+t.balance+'">'+money(t.balance)+'</td></tr>';});
   mount(h+'</tbody></table>');}
 function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</h1>');
   let rk=null,st=null;for(const c of (compsByLeague[t.league_id]||[])){const i=c.standings.findIndex(s=>s.team_id==id);if(i>=0){rk=i+1;st=c.standings[i];break;}}
   const stats=[];if(rk)stats.push(statCell('Rank','#'+rk,rk===1?'gold':''));
   if(st){stats.push(statCell('Record',st.win+'–'+st.lose));stats.push(statCell('Win%',pct(st.win,st.win+st.lose)));}
   stats.push(statCell('Fans',t.fan_count.toLocaleString()));stats.push(statCell('Balance',money(t.balance),t.balance<0?'neg':''));
+  const sqN=(squadByTeam[id]||[]).length;if(sqN)stats.push(statCell('Squad',sqN));
   let h=heroHeader(teamLogo(id,74),'Team',esc(t.name),lLink(t.league_id)+' · manager '+esc(t.manager),stats);
   if(t.rank_hist&&t.rank_hist.length>1){
     h+='<h2>Standings trend <small>last '+t.rank_hist.length+' days'+(rk?' · now #'+rk:'')+'</small></h2>'+spark(t.rank_hist,true,220,40);}
@@ -242,7 +255,8 @@ function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</
     const tbl=(title,rows)=>'<div><table class="s"><thead><tr><th>'+title+'</th><th data-num>Games</th></tr></thead><tbody>'+(rows.map(e=>'<tr><td>'+cLink(e[0])+'</td><td class="num">'+e[1]+'</td></tr>').join('')||'<tr><td class="sub">none</td><td></td></tr>')+'</tbody></table></div>';
     h+=tbl('Most picked',pks)+tbl('Most banned',bns)+'</div>';}
   mount(h);}
-function vPlayers(){let h='<h1>Players</h1><p class="sub">click a column to sort · '+D.athletes.length+' athletes</p><table class="s"><thead><tr><th>Player</th><th>Team</th><th data-num>Age</th><th data-num>M</th><th data-num>W</th><th data-num>Rating</th><th data-num>K</th><th data-num>D</th><th data-num>A</th><th data-num>MVP</th></tr></thead><tbody>';
+function vPlayers(){const fa=D.athletes.filter(a=>a.team_id==null).length;
+  let h='<h1>Players</h1><p class="sub">click a column to sort · '+D.athletes.length+' athletes'+(fa?' · <a href="#/free-agents">'+fa+' free agents →</a>':'')+'</p><table class="s"><thead><tr><th>Player</th><th>Team</th><th data-num>Age</th><th data-num>M</th><th data-num>W</th><th data-num>Rating</th><th data-num>K</th><th data-num>D</th><th data-num>A</th><th data-num>MVP</th></tr></thead><tbody>';
   D.athletes.forEach(a=>{h+='<tr><td>'+aLink(a.id,40)+'</td><td>'+(a.team_id!=null?tLink(a.team_id):'<span class="sub">FA</span>')+'</td><td class="num">'+a.age+'</td><td class="num">'+a.matches+'</td><td class="num">'+a.wins+'</td><td class="num">'+avgRating(a.rating,a.matches)+'</td><td class="num">'+a.kills+'</td><td class="num">'+a.deaths+'</td><td class="num">'+a.assists+'</td><td class="num">'+a.mvp+'</td></tr>';});
   mount(h+'</tbody></table>');}
 function vPlayer(id){const a=athById[id];if(!a)return mount('<h1>Player not found</h1>');
@@ -268,6 +282,19 @@ function vPlayer(id){const a=athById[id];if(!a)return mount('<h1>Player not foun
   if(log.length){h+='<h2>Match log</h2><table><thead><tr><th>Champion</th><th>Role</th><th>Opponent</th><th>Result</th></tr></thead><tbody>';
     log.forEach(x=>{h+='<tr><td>'+cLink(x.p.champion)+'</td><td>'+roleTag(x.p.position)+'</td><td>'+tLink(x.opp)+'</td><td class="'+(x.won?'win':'loss')+'"><a href="#/match/'+x.m.id+'">'+(x.won?'Win':'Loss')+'</a></td></tr>';});h+='</tbody></table>';}
   mount(h);}
+// ===== Free Agents board: the unsigned-talent market, enabled by accurate team_id (null = no club). =====
+function vFreeAgents(){const fa=D.athletes.filter(a=>a.team_id==null);
+  let h=heroHeader('','Market','Free Agents','<b>'+fa.length+'</b> unsigned athletes · available to any club',
+    [statCell('Available',fa.length),statCell('Avg age',fa.length?Math.round(fa.reduce((s,a)=>s+(a.age||0),0)/fa.length):'—'),statCell('Match-tested',fa.filter(a=>a.matches>0).length)]);
+  if(!fa.length)return mount(h+'<p class="sub">No free agents — every athlete is under contract.</p>');
+  h+='<p class="sub">click a column to sort · Overall = mean of the 12 attributes (a guide when there’s no match history)</p>'
+    +'<table class="s"><thead><tr><th>Player</th><th>Best role</th><th data-num>Age</th><th data-num>Overall</th><th data-num>M</th><th data-num>Rating</th><th data-nosort>Recent champions</th></tr></thead><tbody>';
+  fa.sort((a,b)=>ovr(b)-ovr(a)||(b.matches-a.matches));
+  fa.forEach(a=>{const bp=bestPos(a),o=ovr(a);
+    h+='<tr><td>'+aLink(a.id,40)+'</td><td data-s="'+(bp?bp.idx:9)+'">'+(bp?roleTag(bp.idx):'<span class="sub">—</span>')+'</td>'
+      +'<td class="num">'+a.age+'</td><td class="num" data-s="'+o+'"><b>'+o+'</b></td><td class="num">'+a.matches+'</td><td class="num">'+avgRating(a.rating,a.matches)+'</td>'
+      +'<td>'+((a.recent_champions||[]).slice(0,5).map(c=>'<a href="#/champion/'+encodeURIComponent(c)+'" title="'+esc(champName(c))+'">'+champIcon(c,24,true,'')+'</a>').join('')||'<span class="sub">—</span>')+'</td></tr>';});
+  mount(h+'</tbody></table>');}
 // Meta score = presence (pick+ban rate) lifted by win-rate over 50%.
 function champMeta(c){if(!c.games||!c.picks)return null;const minGames=Math.max(3,c.games*0.03);if((c.picks+c.bans)<minGames)return null;
   const pres=100*(c.picks+c.bans)/c.games,wr=100*c.wins/c.picks;return {pres,wr,score:pres+(wr-50)};}
@@ -308,11 +335,20 @@ function vChampions(){const g=D.champions[0]?D.champions[0].games:0;
   if(!names.length)names=D.champions.map(c=>c.name);
   const rows=names.map(n=>champByName[n]||{name:n,picks:0,bans:0,wins:0,games:g});
   rows.sort((a,b)=>(b.picks+b.bans)-(a.picks+a.bans)||a.name.localeCompare(b.name));
-  let h='<h1>Champions</h1><p class="sub">'+rows.length+' champions · click one for its full kit · pick/ban/win over last '+g+' games · click a column to sort</p>'+vTierList()
+  // champ_stats keys = available_champions = THIS season's pool. Partition so out-of-pool champions
+  // (not pickable this season) don't sit in the meta tables as if they were live. Graceful: pool unknown → show all.
+  const pool=poolKnown?rows.filter(c=>inPool(c.name)):rows;
+  const off=poolKnown?names.filter(n=>!inPool(n)).sort((a,b)=>a.localeCompare(b)):[];
+  const sub=poolKnown?('<b>'+pool.length+'</b> in this season’s pool · '+off.length+' not available · '):(rows.length+' champions · ');
+  let h='<h1>Champions</h1><p class="sub">'+sub+'<a href="#/champ-stats">base stats &amp; patch watch →</a> · click a champion for its full kit · pick/ban/win over last '+g+' games</p>'+vTierList()
+    +'<h2>Champion pool'+(poolKnown?' <small>'+pool.length+' active this season · click a column to sort</small>':'')+'</h2>'
     +'<table class="s"><thead><tr><th>Champion</th><th>Class</th><th data-num>Picks</th><th data-num>Pick%</th><th data-num>Bans</th><th data-num>Ban%</th><th data-num>Win%</th></tr></thead><tbody>';
-  rows.forEach(c=>{const def=champDef(c.name);
+  pool.forEach(c=>{const def=champDef(c.name);
     h+='<tr><td>'+cLink(c.name,40)+'</td><td class="sub">'+(def?esc(champCat(def.category)):'—')+'</td><td class="num">'+c.picks+'</td><td class="num" data-s="'+(c.games?c.picks/c.games:0)+'">'+(c.picks?pct(c.picks,c.games):'—')+'</td><td class="num">'+c.bans+'</td><td class="num" data-s="'+(c.games?c.bans/c.games:0)+'">'+(c.bans?pct(c.bans,c.games):'—')+'</td><td class="num" data-s="'+(c.picks?c.wins/c.picks:0)+'">'+(c.picks?pct(c.wins,c.picks):'—')+'</td></tr>';});
-  mount(h+'</tbody></table>');}
+  h+='</tbody></table>';
+  if(off.length)h+='<h2>Not available this season <small>'+off.length+' champions outside the pool</small></h2>'
+    +'<div class="tier-band offpool">'+off.map(n=>'<a class="tband-chip" href="#/champion/'+encodeURIComponent(n)+'">'+champIcon(n,32,true,'show')+'<span>'+esc(champName(n))+'</span></a>').join('')+'</div>';
+  mount(h);}
 function vChampion(name){const c=champByName[name];const def=champDef(name);const dsc=champDesc(name);
   const live=champStatById[name];const cstat=live?live.stat:(def?def.stat:null),cgrowth=live?live.growth:(def?def.growth:null);
   // ----- champion card: portrait + identity + meta + base-stat pills (all in the hero) -----
@@ -343,6 +379,32 @@ function vChampion(name){const c=champByName[name];const def=champDef(name);cons
   const pr=Object.entries(players).sort((a,b)=>b[1]-a[1]);
   if(pr.length){h+='<h2>Played by</h2><table><thead><tr><th>Player</th><th data-num>Games</th></tr></thead><tbody>'+pr.map(e=>'<tr><td>'+aLink(e[0])+'</td><td class="num">'+e[1]+'</td></tr>').join('')+'</tbody></table>';}
   mount(h);}
+// ===== Base stats & Patch Watch: surface the LIVE champion stats (champ_stats, from the running
+// game) for the active pool, and diff them against the base game to show buffs/nerfs. =====
+const CSTAT_FIELDS=['attack','hp','defence','magic_resistance','magic_power','move_speed','crit_chance','hp_regen'];
+function vChampStats(){const pool=(D.champ_stats||[]).slice();
+  if(!pool.length)return mount('<h1>Champion base stats</h1><p class="sub">Live champion stats aren’t in this data yet — load a game on the current build. <a href="#/champions">← Champions</a></p>');
+  // Patch Watch: live (champ_stats) vs base game (champDef) — collect every changed stat/growth.
+  const changes=[];
+  pool.forEach(c=>{const def=champDef(c.id);if(!def||!def.stat)return;const ds=[];
+    CSTAT_FIELDS.forEach(f=>{const cur=c.stat[f]||0,base=def.stat[f]||0;if(cur!==base)ds.push({f,base,cur,d:cur-base});
+      const gb=(def.growth&&def.growth[f])||0,gc=(c.growth&&c.growth[f])||0;if(gc!==gb)ds.push({f,base:gb,cur:gc,d:gc-gb,g:1});});
+    if(ds.length)changes.push({id:c.id,ds});});
+  let h=heroHeader('','Champions','Base stats & patch watch','Live champion base stats from the running game · '+pool.length+' champions in the pool',
+    [statCell('In pool',pool.length),statCell('Changed',changes.length,changes.length?'pos':'')]);
+  h+='<p class="sub"><a href="#/champions">← back to the meta</a></p><h2>Patch Watch</h2>';
+  if(changes.length)h+='<div class="pwatch">'+changes.map(ch=>'<a class="pw-card" href="#/champion/'+encodeURIComponent(ch.id)+'">'+champIcon(ch.id,34,true,'show')
+    +'<div class="pw-b"><span class="pw-n">'+esc(champName(ch.id))+'</span><span class="pw-d">'
+    +ch.ds.map(x=>'<span class="'+(x.d>0?'pos':'neg')+'">'+CHAMP_STAT_ABBR[x.f]+' '+(x.g?'+'+x.base+'→+'+x.cur+'/lv':x.base+'→'+x.cur)+' ('+(x.d>0?'+':'')+x.d+')</span>').join('')
+    +'</span></div></a>').join('')+'</div>';
+  else h+='<p class="sub">No balance changes this patch — every live value matches the base game. This board lights up the moment a champion is buffed or nerfed.</p>';
+  h+='<h2>Base stats <small>live values · growth per level · click a column to sort</small></h2><table class="s"><thead><tr><th>Champion</th><th>Class</th>'
+    +CSTAT_FIELDS.map(f=>'<th data-num>'+CHAMP_STAT_ABBR[f]+'</th>').join('')+'</tr></thead><tbody>';
+  pool.sort((a,b)=>(b.stat.hp||0)-(a.stat.hp||0));
+  pool.forEach(c=>{const def=champDef(c.id);
+    h+='<tr><td>'+cLink(c.id,32)+'</td><td class="sub">'+(def?esc(champCat(def.category)):'—')+'</td>'
+      +CSTAT_FIELDS.map(f=>{const v=c.stat[f]||0,gw=(c.growth&&c.growth[f])||0;return '<td class="num" data-s="'+v+'">'+v+(gw?'<span class="sp-g" title="per level">+'+gw+'</span>':'')+'</td>';}).join('')+'</tr>';});
+  mount(h+'</tbody></table>');}
 function decodeRef(s,comp){let m;s=String(s);
   if(m=s.match(/^Normal\((\d+)\)/))return tLink(+m[1]);
   if(m=s.match(/^CompetitionRank\(\d+,\s*(\d+)\)/)){const r=+m[1],st=comp&&comp.standings[r-1];return 'Seed '+r+(st?' · '+tLink(st.team_id):'');}
@@ -664,11 +726,12 @@ function vSearch(q){q=String(q||'').toLowerCase();
   h+='<h2>Players</h2><div class="chips">'+(pl.map(a=>'<span>'+aLink(a.id)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   h+='<h2>Champions</h2><div class="chips">'+(ch.map(c=>'<span>'+cLink(c.name)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';mount(h);}
 function setActiveNav(){const seg=location.hash.replace(/^#\/?/,'').split('/')[0]||'';
-  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players',champions:'#/champions',champion:'#/champions',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
+  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
   const want=m[seg]||'#/';document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')===want));}
 function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);
   switch(p[0]){case '':return vHome();case 'standings':return vStandings();case 'news':return vNews();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
-    case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'champions':return vChampions();
+    case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'free-agents':return vFreeAgents();case 'champions':return vChampions();
+    case 'champ-stats':return vChampStats();
     case 'champion':return vChampion(p.slice(1).join('/'));case 'matches':return vMatches();case 'match':return vMatch(+p[1]);
     case 'leagues':return vLeagues();case 'league':return vLeague(+p[1]);
     case 'article':return vArticle(p[1]);case 'transfers':return vTransfers();
@@ -716,8 +779,9 @@ function railTeam(t){let h='';
   const nx=nextMatch(t);if(nx)h+=railCard('Next Up','schedule →','#/league/'+t.league_id,'<div class="rail-next"><span class="sub">'+esc(nx.m.date)+'</span><div>vs '+decodeRef(nx.opp,nx.comp)+'</div></div>');
   const log=[];D.matches.forEach(m=>{if(log.length>=4)return;if(m.blue_team_id==t.id||m.red_team_id==t.id){const won=(m.blue_team_id==t.id)===m.blue_win;const opp=m.blue_team_id==t.id?m.red_team_id:m.blue_team_id;log.push({m,won,opp});}});
   if(log.length)h+=railCard('Recent Form','','',log.map(x=>'<a class="rk-i" href="#/match/'+x.m.id+'"><span class="rk-n '+(x.won?'win':'loss')+'">'+(x.won?'W':'L')+'</span>'+teamLogo(x.opp,22)+'<span class="rk-nm">'+esc(tName(x.opp))+'</span></a>').join(''));
-  const squad=(t.roster||[]).filter(x=>x!=null);
-  if(squad.length)h+=railCard('Squad','team page →','#/team/'+t.id,squad.map(aid=>{const a=athById[aid];return rankRow('#/player/'+aid,avatar(aid,22),a?a.name:'#'+aid,a&&a.matches?avgRating(a.rating,a.matches):'');}).join(''));
+  const starterIds=(t.roster||[]).filter(x=>x!=null),sset=new Set(starterIds);
+  const squad=[...starterIds,...(squadByTeam[t.id]||[]).filter(id=>!sset.has(id))]; // starters first, then bench (subs now resolve)
+  if(squad.length)h+=railCard('Squad','team page →','#/team/'+t.id,squad.slice(0,9).map(aid=>{const a=athById[aid];return rankRow('#/player/'+aid,avatar(aid,22),a?a.name:'#'+aid,a&&a.matches?avgRating(a.rating,a.matches):(sset.has(aid)?'':'<span class="sub">sub</span>'));}).join(''));
   const news=(D.news||[]).filter(n=>n.team==t.id).slice(0,3);
   if(news.length)h+=railCard('Club News','newsroom →','#/news',news.map(n=>{const idx=D.news.indexOf(n);return '<a class="wire-i" href="#/article/'+idx+'"><span class="ntag">'+esc(OFFICE_TAGS[newsScope(n)]||'News')+'</span><span class="wire-t">'+esc(headline(n,idx))+'</span></a>';}).join(''));
   return h||railGlobal();}

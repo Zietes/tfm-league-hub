@@ -177,6 +177,16 @@ td.r1{color:var(--gold)}td.r2{color:#c8d2df}td.r3{color:#cd8f5a}
 .tier-band{display:flex;flex-wrap:wrap;gap:8px}
 .tband-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 13px 5px 6px;background:var(--surface);border:1px solid var(--line2);border-radius:999px;color:var(--link);font-size:13px;font-weight:600;transition:.12s}
 .tband-chip:hover{border-color:var(--acd);background:rgba(70,200,255,.08);color:#fff;text-decoration:none;transform:translateY(-1px)}
+/* out-of-pool champions: dimmed (not pickable this season), brighten on hover */
+.offpool .tband-chip{opacity:.42;filter:saturate(.6)}.offpool .tband-chip:hover{opacity:1;filter:none}
+/* Patch Watch cards — buff/nerf deltas vs base game */
+.pwatch{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin:6px 0 18px}
+.pw-card{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;transition:.12s}
+.pw-card:hover{border-color:var(--acd);text-decoration:none;transform:translateY(-1px)}
+.pw-b{display:flex;flex-direction:column;gap:4px;min-width:0}
+.pw-n{font-weight:700;color:#fff;font-size:14px}
+.pw-d{display:flex;flex-wrap:wrap;gap:4px 8px}
+.pw-d span{font:600 11px/1.2 var(--mono)}.pw-d .pos{color:var(--win)}.pw-d .neg{color:var(--loss)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:12px}
 .tile{display:flex;align-items:center;gap:13px;padding:14px 15px;background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);transition:.14s}
 .tile:hover{border-color:var(--acd);transform:translateY(-2px);text-decoration:none;box-shadow:0 8px 22px rgba(0,0,0,.4)}
