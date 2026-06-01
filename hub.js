@@ -382,10 +382,20 @@ function vChampion(name){const c=champByName[name];const def=champDef(name);cons
     // this champion's picks across all matches (with win flag) — drives both role combat + item builds
     const cp=[];D.matches.forEach(m=>{const bw=m.blue_win;m.picks.forEach(p=>{if(p.champion==name)cp.push({p,won:p.blue===bw});});});
     const rmean=(arr,f)=>arr.length?arr.reduce((s,x)=>s+(x.p[f]||0),0)/arr.length:0;
-    // By role — combat (K/D, damage, CS) varies by role even when builds don't.
+    // most common full build within a set of picks → {items,n}
+    const topBuild=ps=>{const cb={};ps.forEach(x=>{const a=x.p.items.slice().sort((p,q)=>p-q),k=a.join(',');if(!cb[k])cb[k]={items:a,n:0};cb[k].n++;});return Object.values(cb).sort((a,b)=>b.n-a.n)[0]||null;};
+    // By role — combat (K/D, damage, CS) varies by role; the role's typical build is shown when the sample is usable (≥6).
     let rr='';for(let i=0;i<5;i++){if(c.role_picks[i]>0){const rp=cp.filter(x=>x.p.position===i),dmg=Math.round(rmean(rp,'deal'));
-      rr+='<tr><td>'+roleTag(i)+'</td><td class="num">'+c.role_picks[i]+'</td><td class="num">'+pct(c.role_wins[i],c.role_picks[i])+'</td><td class="num">'+rmean(rp,'kills').toFixed(1)+' / '+rmean(rp,'deaths').toFixed(1)+'</td><td class="num" data-s="'+dmg+'">'+dmg.toLocaleString()+'</td><td class="num">'+rmean(rp,'cs').toFixed(0)+'</td></tr>';}}
-    if(rr)h+='<h2>By role</h2><table class="s"><thead><tr><th>Role</th><th data-num>Picks</th><th data-num>Win%</th><th data-num>Avg K/D</th><th data-num>Avg DMG</th><th data-num>Avg CS</th></tr></thead><tbody>'+rr+'</tbody></table>';
+      const wi=rp.filter(x=>x.p.items&&x.p.items.length),tb=wi.length>=6?topBuild(wi):null;
+      rr+='<tr><td>'+roleTag(i)+'</td><td class="num">'+c.role_picks[i]+'</td><td class="num">'+pct(c.role_wins[i],c.role_picks[i])+'</td><td class="num">'+rmean(rp,'kills').toFixed(1)+' / '+rmean(rp,'deaths').toFixed(1)+'</td><td class="num" data-s="'+dmg+'">'+dmg.toLocaleString()+'</td><td class="num">'+rmean(rp,'cs').toFixed(0)+'</td><td class="bcell"'+(tb?' title="'+esc(tb.items.map(itemName).join(' + ')+' · '+tb.n+'/'+wi.length+' games')+'"':'')+'>'+(tb?tb.items.map(x=>itemChip(x,22)).join(''):'<span class="sub">varies</span>')+'</td></tr>';}}
+    if(rr)h+='<h2>By role</h2><table class="s"><thead><tr><th>Role</th><th data-num>Picks</th><th data-num>Win%</th><th data-num>Avg K/D</th><th data-num>Avg DMG</th><th data-num>Avg CS</th><th data-nosort>Typical build</th></tr></thead><tbody>'+rr+'</tbody></table>';
+    // Role specialists — who plays this champion MOST in each role (the go-to player), record shown as context.
+    // (Most-games is stable; ranking by win% over a 2-game min would surface noisy 0–2 "bests".)
+    let spec='';for(let i=0;i<5;i++){const rp=cp.filter(x=>x.p.position===i);if(rp.length<2)continue;
+      const byA={};rp.forEach(x=>{const a=(byA[x.p.athlete_id]=byA[x.p.athlete_id]||{g:0,w:0,net:0});a.g++;if(x.won)a.w++;a.net+=(x.p.kills-x.p.deaths);});
+      const best=Object.entries(byA).filter(e=>e[1].g>=2).sort((A,B)=>(B[1].g-A[1].g)||(B[1].w/B[1].g-A[1].w/A[1].g)||(B[1].net-A[1].net))[0];
+      if(best){const id=+best[0],a=best[1];spec+='<div class="spec"><span class="spec-r">'+roleTag(i)+'</span><a class="spec-p" href="#/player/'+id+'">'+avatar(id,30)+'<span>'+esc((athById[id]||{}).name||('#'+id))+'</span></a><span class="spec-rec">'+a.g+'g <span class="sub">'+a.w+'–'+(a.g-a.w)+'</span></span></div>';}}
+    if(spec)h+='<h2>Role specialists <small>who plays '+esc(champName(name))+' most in each role · min 2 games</small></h2><div class="specs">'+spec+'</div>';
     // Item builds — the most common item combinations (3-item sets) and signature items, with win rate.
     const withI=cp.filter(x=>x.p.items&&x.p.items.length);
     if(withI.length>=4){
@@ -393,9 +403,15 @@ function vChampion(name){const c=champByName[name];const def=champDef(name);cons
       const core=Object.entries(itf).map(([i,n])=>[+i,n]).sort((a,b)=>b[1]-a[1]).slice(0,6);
       const cb={};withI.forEach(x=>{const arr=x.p.items.slice().sort((a,b)=>a-b),k=arr.join(',');if(!cb[k])cb[k]={items:arr,n:0,w:0};cb[k].n++;if(x.won)cb[k].w++;});
       const builds=Object.values(cb).sort((a,b)=>b.n-a.n).filter(b=>b.n>=2).slice(0,3); // full builds, ≥2 games
-      h+='<h2>Item builds <small>signature items &amp; combinations across '+withI.length+' games · consistent across roles</small></h2>';
+      h+='<h2>Item builds <small>signature items &amp; combinations across '+withI.length+' games</small></h2>';
       h+='<div class="coreitems">'+core.map(([i,n])=>'<span class="ci" title="'+esc(itemName(i))+' · in '+pct(n,withI.length)+' of games">'+itemChip(i,32)+'<b>'+pct(n,withI.length)+'</b></span>').join('')+'</div>';
       if(builds.length)h+='<div class="builds">'+builds.map((b,idx)=>'<div class="bld'+(idx===0?' top':'')+'"><div class="bld-i">'+b.items.map(i=>itemChip(i,34)).join('')+'</div><div class="bld-m"><span class="bld-share">'+pct(b.n,withI.length)+'</span><span class="bld-sub">'+b.n+' games · '+pct(b.w,b.n)+' win</span></div></div>').join('')+'</div>';
+      // Item impact — win-rate swing WITH vs WITHOUT each item (swing items only; core items have no "without" sample).
+      const totW=withI.filter(x=>x.won).length,used={};withI.forEach(x=>new Set(x.p.items).forEach(i=>used[i]=1));
+      const imp=Object.keys(used).map(i=>{i=+i;let gw=0,ww=0;withI.forEach(x=>{if(x.p.items.indexOf(i)>=0){gw++;if(x.won)ww++;}});const gwo=withI.length-gw,wwo=totW-ww;
+        return {i,gw,wrW:gw?100*ww/gw:0,delta:(gw?100*ww/gw:0)-(gwo?100*wwo/gwo:0)};}).filter(o=>o.gw>=3&&(withI.length-o.gw)>=3).sort((a,b)=>b.delta-a.delta);
+      if(imp.length){const show=imp.length<=5?imp:[...imp.slice(0,3),...imp.slice(-2)];
+        h+='<h3 class="ibh">Item impact <small>win rate with vs without · swing items only</small></h3><div class="impact">'+show.map(o=>'<div class="imp"><span class="imp-i">'+itemChip(o.i,26)+'</span><span class="imp-n">'+esc(itemName(o.i))+'</span><span class="imp-wr">'+o.wrW.toFixed(0)+'% win<span class="sub"> · '+o.gw+'g</span></span><span class="imp-d '+(o.delta>=0?'pos':'neg')+'" title="win-rate swing vs games without this item">'+(o.delta>=0?'+':'')+o.delta.toFixed(0)+'</span></div>').join('')+'</div>';}
     }
   }
   const players={};D.matches.forEach(m=>m.picks.forEach(p=>{if(p.champion==name)players[p.athlete_id]=(players[p.athlete_id]||0)+1;}));

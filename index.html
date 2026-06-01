@@ -200,6 +200,22 @@ td.r1{color:var(--gold)}td.r2{color:#c8d2df}td.r3{color:#cd8f5a}
 .bld-m{display:flex;flex-direction:column;gap:2px}
 .bld-share{font:800 15px/1 var(--mono);color:#fff}
 .bld-sub{font:600 10px/1.2 var(--mono);color:var(--mut)}
+.bcell{white-space:nowrap}
+/* role specialists */
+.specs{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 18px}
+.spec{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 13px;min-width:228px}
+.spec-r{display:flex;align-items:center;gap:5px;font:800 11px/1 var(--sans);letter-spacing:.03em;color:var(--mut);min-width:62px}
+.spec-p{display:flex;align-items:center;gap:7px;font-weight:600;flex:1;min-width:0}
+.spec-rec{font:800 13px/1 var(--mono);color:#fff;white-space:nowrap}
+/* item impact (win-rate swing) */
+.ibh{font:800 13px/1 var(--sans);letter-spacing:.02em;margin:16px 0 8px;color:var(--fg)}
+.ibh small{font:500 11px/1 var(--sans);color:var(--mut);margin-left:8px}
+.impact{display:flex;flex-direction:column;gap:6px;margin:6px 0 18px;max-width:560px}
+.imp{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+.imp-i{flex:none;line-height:0}.imp-n{flex:1;font-weight:600;min-width:0}
+.imp-wr{font:600 11px/1 var(--mono);color:var(--mut);white-space:nowrap}
+.imp-d{font:800 14px/1 var(--mono);min-width:42px;text-align:right}
+.imp-d.pos{color:var(--win)}.imp-d.neg{color:var(--loss)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:12px}
 .tile{display:flex;align-items:center;gap:13px;padding:14px 15px;background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);transition:.14s}
 .tile:hover{border-color:var(--acd);transform:translateY(-2px);text-decoration:none;box-shadow:0 8px 22px rgba(0,0,0,.4)}
