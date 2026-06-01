@@ -30,7 +30,35 @@ a{color:var(--link);text-decoration:none}a:hover{color:var(--ac);text-decoration
 #nav input::placeholder{color:var(--faint)}
 #nav input:focus{outline:none;border-color:var(--acd);box-shadow:0 0 0 3px rgba(70,200,255,.15)}
 #nav .upd{color:var(--faint);font:12px var(--mono);padding-left:4px}
-#app{padding:22px 24px 56px;max-width:1120px}
+/* layout shell: main column + a sticky right rail ("The Wire") that fills the
+   otherwise-dead right third on wide screens; collapses to one column < 1240px. */
+.shell{max-width:1640px;margin:0 auto;padding:0 22px}
+#app{padding:22px 0 56px;min-width:0}
+#rail{display:none}
+@media(min-width:1240px){
+  .shell{display:grid;grid-template-columns:minmax(0,1fr) 322px;gap:32px;align-items:start}
+  #rail{display:flex;flex-direction:column;gap:16px;position:sticky;top:60px;padding:24px 0 40px;min-width:0}
+}
+/* rail cards */
+.rc{background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+.rc-h{display:flex;align-items:center;gap:8px;padding:11px 13px;font:800 10.5px/1 var(--sans);letter-spacing:.15em;text-transform:uppercase;color:#fff;border-bottom:1px solid var(--line);background:rgba(255,255,255,.018)}
+.rc-more{margin-left:auto;font:600 10px/1 var(--mono);letter-spacing:.03em;color:var(--faint);text-transform:none;white-space:nowrap}
+.rc-more:hover{color:var(--ac);text-decoration:none}
+.livedot{width:7px;height:7px;border-radius:50%;background:var(--loss);animation:pulse 2.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,107,120,.5)}70%{box-shadow:0 0 0 6px rgba(255,107,120,0)}100%{box-shadow:0 0 0 0 rgba(255,107,120,0)}}
+.wire-i{display:block;padding:9px 13px;border-bottom:1px solid var(--line);transition:.12s}
+.wire-i:last-child{border-bottom:0}
+.wire-i:hover{background:rgba(70,200,255,.06);text-decoration:none}
+.wire-i .ntag{font-size:8px;padding:1px 5px}
+.wire-t{display:block;color:var(--link);font-size:12.5px;line-height:1.36;margin-top:4px}
+.wire-i:hover .wire-t{color:#fff}
+.rk-i{display:flex;align-items:center;gap:8px;padding:7px 13px;border-bottom:1px solid var(--line);transition:.12s}
+.rk-i:last-child{border-bottom:0}
+.rk-i:hover{background:rgba(70,200,255,.06);text-decoration:none}
+.rk-n{font:800 11px/1 var(--mono);color:var(--faint);width:13px;text-align:center;flex:none}
+.rk-nm{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--link);font-size:12.5px;font-weight:500}
+.rk-i:hover .rk-nm{color:#fff}
+.rk-p{margin-left:auto;font:800 12.5px/1 var(--mono);color:var(--ac);flex:none}
 h1{font-size:27px;font-weight:800;letter-spacing:-.02em;color:#fff;margin:6px 0 14px;position:relative;padding-bottom:11px}
 h1::after{content:"";position:absolute;left:0;bottom:0;width:46px;height:3px;border-radius:2px;background:var(--ac);box-shadow:0 0 12px var(--ac)}
 h1 a{color:#fff}
@@ -140,7 +168,7 @@ h2{scroll-margin-top:66px}
 .switch a:hover{color:#fff;border-color:var(--acd);background:rgba(70,200,255,.10);text-decoration:none}
 .tchip{display:inline-flex !important;align-items:center;gap:7px;padding:4px 11px 4px 5px !important}
 @media(max-width:680px){
-  #app{padding:16px 14px 48px}h1{font-size:21px}.hero h1{font-size:21px}
+  .shell{padding:0}#app{padding:16px 14px 48px}h1{font-size:21px}.hero h1{font-size:21px}
   .hero{gap:14px;padding:15px 16px}.hero .art{width:74px;height:74px}
   #nav{padding:0 14px}#nav input{min-width:140px}}
 footer{padding:18px 24px;margin-top:20px;color:var(--faint);font-size:12px;border-top:1px solid var(--line)}

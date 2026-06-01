@@ -59,7 +59,7 @@ function spRecolor(d,f){for(let i=0;i<d.length;i+=4){if(d[i+3]<10)continue;const
   else if(r===0&&g===1)p=SP_CLOTH[spCl(f[6],16)];else if(r===0&&g===2)p=SP_CLOTH[spCl(f[7],16)];
   if(p){const c=p[Math.min(b,2)]||p[0];d[i]=c[0];d[i+1]=c[1];d[i+2]=c[2];}}}
 let SP_IMG=null,SP_READY=false;const SP_CACHE={};
-function spInit(){if(SP_IMG||!window.PLAYER_SHEET_URL||!window.PLAYER_CELLS)return;SP_IMG=new Image();SP_IMG.onload=function(){SP_READY=true;router();};SP_IMG.src=window.PLAYER_SHEET_URL;}
+function spInit(){if(SP_IMG||!window.PLAYER_SHEET_URL||!window.PLAYER_CELLS)return;SP_IMG=new Image();SP_IMG.onload=function(){SP_READY=true;router();renderRail();};SP_IMG.src=window.PLAYER_SHEET_URL;}
 // composite one player's sprite (layers in z-order), recolor, crop to bbox → cache {u,bw,bh}.
 function spSprite(f){const sig=f.join(',');if(SP_CACHE[sig])return SP_CACHE[sig];const C=window.PLAYER_CELLS;
   const cv=document.createElement('canvas');cv.width=64;cv.height=64;const x=cv.getContext('2d');x.imageSmoothingEnabled=false;
@@ -560,10 +560,34 @@ const curHash=()=>(location.hash&&location.hash!=='#')?location.hash:'#/';
 addEventListener('hashchange',()=>{sessionStorage.setItem('hub_route',curHash());router();scrollTo(0,0);});
 addEventListener('beforeunload',()=>{sessionStorage.setItem('hub_route',curHash());sessionStorage.setItem('hub_sy',scrollY);});
 function setUpd(){const u=document.querySelector('#nav .upd');if(u)u.textContent='#'+(D.updated||0);}
+// ===== "The Wire": a persistent right rail of live, glanceable widgets (fills the
+// dead right-third on wide screens). Built once into a .shell wrapper around #app; it
+// PERSISTS across routes (re-rendered only on data update), so it never flickers. =====
+function ensureLayout(){const app=document.getElementById('app');if(!app||(app.parentNode&&app.parentNode.classList&&app.parentNode.classList.contains('shell')))return;
+  const shell=document.createElement('div');shell.className='shell';
+  app.parentNode.insertBefore(shell,app);shell.appendChild(app);
+  const rail=document.createElement('aside');rail.id='rail';shell.appendChild(rail);}
+function renderRail(){const rail=document.getElementById('rail');if(!rail||typeof D==='undefined'||!D.teams)return;
+  const wireItem=s=>'<a class="wire-i" href="'+s.link+'"><span class="ntag '+(s.cls||'')+'">'+esc(s.tag)+'</span><span class="wire-t">'+esc(s.head)+'</span></a>';
+  const card=(title,more,route,inner)=>inner?('<section class="rc"><div class="rc-h">'+title+'<a class="rc-more" href="'+route+'">'+more+'</a></div>'+inner+'</section>'):'';
+  let h='';
+  // THE WIRE — a balanced events mix (results/transfers/standings); avoid cross-desk score-scale bias.
+  const wire=[].concat(deskResults(3),deskTransfers(2),deskStandings(2)).filter(Boolean).slice(0,5);
+  h+='<section class="rc"><div class="rc-h"><span class="livedot"></span>The Wire<a class="rc-more" href="#/news">newsroom →</a></div>'
+    +(wire.length?wire.map(wireItem).join(''):'<p class="sub" style="padding:11px 13px">Stories appear as matches play out.</p>')+'</section>';
+  // TOP OF THE TABLE — cross-league points leaders
+  const leaders=[];D.competitions.forEach(c=>{if(c.standings&&c.standings[0])leaders.push(c.standings[0]);});leaders.sort((a,b)=>b.points-a.points);
+  h+=card('Top of the Table','leagues →','#/leagues',leaders.slice(0,5).map((s,i)=>'<a class="rk-i" href="#/team/'+s.team_id+'"><span class="rk-n">'+(i+1)+'</span>'+teamLogo(s.team_id,22)+'<span class="rk-nm">'+esc(tName(s.team_id))+'</span><span class="rk-p">'+s.points+'</span></a>').join(''));
+  // META PULSE — hottest champions
+  h+=card('Meta Pulse','tier list →','#/champions',deskMeta(2).map(wireItem).join(''));
+  // IN FORM — top players by rating
+  const form=D.athletes.filter(a=>a.matches>=3).sort((a,b)=>(b.rating/(b.matches*10))-(a.rating/(a.matches*10))).slice(0,4);
+  h+=card('In Form','players →','#/players',form.map(a=>'<a class="rk-i" href="#/player/'+a.id+'">'+avatar(a.id,22)+'<span class="rk-nm">'+esc(a.name)+'</span><span class="rk-p">'+avgRating(a.rating,a.matches)+'</span></a>').join(''));
+  rail.innerHTML=h;}
 // Swap in fresh data and re-render the current route IN PLACE (no page reload → no
 // blink). Scroll is preserved; the nav (incl. the search box) is left intact, only the
 // update counter ticks. Sort state on the current table resets, same as a reload would.
-function applyData(d){if(!d)return;D=d;buildIndex();router();setUpd();}
+function applyData(d){if(!d)return;D=d;buildIndex();router();renderRail();setUpd();}
 // Hosted site only: poll league_data.json and apply it when the publish counter moves.
 // The local file:// broadcast page can't fetch a sibling, so it keeps its <meta refresh>
 // (the mod rewrites that whole file each tick); polling is skipped there.
@@ -573,6 +597,6 @@ function startPolling(){if(!/^https?:$/.test(location.protocol))return;
 // A <meta refresh> reload can drop the URL fragment; restore the route before rendering.
 const savedRoute=sessionStorage.getItem('hub_route');
 if(savedRoute&&savedRoute!=='#/'&&(!location.hash||location.hash==='#'||location.hash==='#/')){history.replaceState(null,'',savedRoute);}
-buildIndex();nav();router();spInit();
+ensureLayout();buildIndex();nav();router();renderRail();spInit();
 const sy=sessionStorage.getItem('hub_sy');if(sy)scrollTo(0,+sy);
 startPolling();
