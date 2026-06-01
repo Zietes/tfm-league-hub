@@ -366,10 +366,13 @@ function vChampion(name){const c=champByName[name];const def=champDef(name);cons
     +(pills?'<div class="chero-stats">'+pills+'</div>':'')
     +'</div></section>';
   if(def){h+='<h2>Abilities</h2><div class="kit">';
-    ABIL_SLOTS.forEach(([slot,lbl,idx])=>{const a=def[slot];if(!a)return;const gd=dsc&&dsc[slot];
-      const d=gd?esc(resolveAbility(gd,a)):(slot==='attack'?('A standard '+(def.category?champCat(def.category).toLowerCase()+' ':'')+'auto-attack.'):'');
-      const eff=abilEffects(a),chips=abilChips(a),ico=skillIcon(name,idx,30);
-      h+='<div class="abil'+(slot==='ult'?' ult-card':'')+'"><div class="abil-h">'+(ico?'<span class="abil-ico">'+ico+'</span>':'')+'<span class="abil-slot '+slot+'">'+lbl+'</span>'+(eff.length?'<span class="abil-eff">'+eff.map(e=>'<span class="etag">'+esc(e)+'</span>').join('')+'</span>':'')+'</div>'
+    ABIL_SLOTS.forEach(([slot,lbl,idx])=>{const a=def[slot];const gd=dsc&&dsc[slot];if(!a&&!gd)return;
+      // Some skills are PASSIVES with no action object (only desc text + a top-level scalar, e.g. Ogre's
+      // on-hit max-health gain) — render those from the description and tag them Passive, rather than
+      // dropping the whole slot (which left a visible gap on Ogre, Monk, Gunner, Dancer, … — 13 champs).
+      const d=gd?esc(resolveAbility(gd,a||{})):(slot==='attack'?('A standard '+(def.category?champCat(def.category).toLowerCase()+' ':'')+'auto-attack.'):'');
+      const eff=a?abilEffects(a):['Passive'],chips=a?abilChips(a):[],ico=skillIcon(name,idx,30);
+      h+='<div class="abil'+(slot==='ult'?' ult-card':'')+(a?'':' passive-card')+'"><div class="abil-h">'+(ico?'<span class="abil-ico">'+ico+'</span>':'')+'<span class="abil-slot '+slot+'">'+lbl+'</span>'+(eff.length?'<span class="abil-eff">'+eff.map(e=>'<span class="etag'+(e==='Passive'?' passive':'')+'">'+esc(e)+'</span>').join('')+'</span>':'')+'</div>'
         +(d?'<p class="abil-d">'+(gd?d:esc(d))+'</p>':'')
         +(chips.length?'<div class="abil-chips">'+chips.map(x=>'<span class="achip"><span class="al">'+x[0]+'</span><span class="av">'+x[1]+'</span></span>').join('')+'</div>':'')+'</div>';});
     h+='</div>';}
