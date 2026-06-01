@@ -31,7 +31,33 @@ function teamLogo(id,size){size=size||20;const t=teamById[id],L=window.TEAM_LOGO
   // so adjacent atlas cells never bleed in, regardless of the cell's aspect ratio.
   const s=size/Math.max(r.w,r.h),dw=r.w*s,dh=r.h*s,ox=(size-dw)/2,oy=(size-dh)/2;
   return '<span class="tlogo" style="width:'+size+'px;height:'+size+'px"><i style="width:'+dw.toFixed(1)+'px;height:'+dh.toFixed(1)+'px;left:'+ox.toFixed(1)+'px;top:'+oy.toFixed(1)+'px;background-image:url(\''+(window.ICON_BASE||'')+'icons/team_logo.png\');background-size:'+((window.TL_SW||0)*s).toFixed(1)+'px '+((window.TL_SH||0)*s).toFixed(1)+'px;background-position:'+(-r.x*s).toFixed(1)+'px '+(-r.y*s).toFixed(1)+'px"></i></span>';}
-function avatar(id,size){const a=athById[id],nm=a?a.name:'?';return badge(initials(nm),hue(nm),'av',size);}
+// --- real player sprites: composite the players atlas + recolor via the FaceData recipe ---
+// window.PLAYER_CELLS {base,hairN,glassesN,necklaceN,tattooN:[x,y,w,h]} + window.PLAYER_SHEET_URL
+// are provided by build_site (hosted site only). Absent (local/broadcast page) → initials avatar.
+const SP_HAIR=[[[40,40,46],[20,20,24],[70,70,78]],[[60,42,30],[38,26,18],[88,64,46]],[[92,62,38],[60,40,24],[124,88,58]],[[120,72,42],[84,48,28],[156,104,66]],[[150,112,62],[112,82,44],[190,150,92]],[[222,182,108],[180,142,78],[245,214,150]],[[228,224,214],[188,184,176],[252,250,244]],[[196,96,44],[150,66,28],[230,134,74]],[[128,52,40],[92,34,26],[168,80,60]],[[70,104,176],[44,72,132],[110,148,212]],[[56,150,150],[34,112,112],[96,190,188]],[[84,150,72],[56,112,48],[124,190,108]],[[120,84,168],[86,56,128],[158,120,206]],[[224,128,176],[184,90,138],[245,166,206]],[[128,130,138],[94,96,104],[170,172,180]]];
+const SP_CLOTH=[[[196,58,58],[150,38,38],[226,96,96]],[[228,132,52],[186,98,32],[245,168,96]],[[232,196,72],[192,158,46],[248,224,124]],[[150,196,72],[112,156,46],[186,224,116]],[[78,170,86],[50,130,60],[120,206,128]],[[56,170,160],[34,130,122],[100,206,196]],[[80,180,210],[50,140,172],[128,212,236]],[[74,118,200],[48,84,156],[116,158,230]],[[56,72,128],[36,48,94],[92,112,170]],[[128,86,180],[92,58,138],[166,124,212]],[[196,76,160],[152,50,124],[226,116,192]],[[232,140,168],[192,102,130],[248,176,200]],[[140,96,62],[102,68,42],[176,128,90]],[[200,176,140],[162,140,108],[228,208,176]],[[232,234,238],[196,198,204],[252,252,254]],[[120,124,132],[88,92,100],[158,162,170]]];
+const spCl=(v,n)=>Math.max(0,Math.min(v|0,n-1));
+// remap key-color pixels: (2,0,b)=hair,(1,0,b)=shirt,(0,1,b)=pants,(0,2,b)=boots; b=shade. skin/outline kept.
+function spRecolor(d,f){for(let i=0;i<d.length;i+=4){if(d[i+3]<10)continue;const r=d[i],g=d[i+1],b=d[i+2];let p=null;
+  if(r===2&&g===0)p=SP_HAIR[spCl(f[1],15)];else if(r===1&&g===0)p=SP_CLOTH[spCl(f[5],16)];
+  else if(r===0&&g===1)p=SP_CLOTH[spCl(f[6],16)];else if(r===0&&g===2)p=SP_CLOTH[spCl(f[7],16)];
+  if(p){const c=p[Math.min(b,2)]||p[0];d[i]=c[0];d[i+1]=c[1];d[i+2]=c[2];}}}
+let SP_IMG=null,SP_READY=false;const SP_CACHE={};
+function spInit(){if(SP_IMG||!window.PLAYER_SHEET_URL||!window.PLAYER_CELLS)return;SP_IMG=new Image();SP_IMG.onload=function(){SP_READY=true;router();};SP_IMG.src=window.PLAYER_SHEET_URL;}
+// composite one player's sprite (layers in z-order), recolor, crop to bbox → cache {u,bw,bh}.
+function spSprite(f){const sig=f.join(',');if(SP_CACHE[sig])return SP_CACHE[sig];const C=window.PLAYER_CELLS;
+  const cv=document.createElement('canvas');cv.width=64;cv.height=64;const x=cv.getContext('2d');x.imageSmoothingEnabled=false;
+  const dr=function(k){const r=C[k];if(r)x.drawImage(SP_IMG,r[0],r[1],r[2],r[3],0,0,64,64);};
+  dr('base');if(f[2]>0)dr('tattoo'+f[2]);if(f[4]>0)dr('necklace'+f[4]);dr('hair'+f[0]);if(f[3]>0)dr('glasses'+f[3]);
+  const id=x.getImageData(0,0,64,64);spRecolor(id.data,f);x.putImageData(id,0,0);
+  let mnx=64,mny=64,mxx=-1,mxy=-1;const d=id.data;
+  for(let yy=0;yy<64;yy++)for(let xx=0;xx<64;xx++){if(d[(yy*64+xx)*4+3]>10){if(xx<mnx)mnx=xx;if(xx>mxx)mxx=xx;if(yy<mny)mny=yy;if(yy>mxy)mxy=yy;}}
+  let r;if(mxx<mnx){r={u:cv.toDataURL(),bw:64,bh:64};}else{const bw=mxx-mnx+1,bh=mxy-mny+1;const c2=document.createElement('canvas');c2.width=bw;c2.height=bh;const x2=c2.getContext('2d');x2.imageSmoothingEnabled=false;x2.drawImage(cv,mnx,mny,bw,bh,0,0,bw,bh);r={u:c2.toDataURL(),bw:bw,bh:bh};}
+  SP_CACHE[sig]=r;return r;}
+function avatar(id,size){size=size||20;const a=athById[id],nm=a?a.name:'?';
+  if(SP_READY&&a&&a.face&&window.PLAYER_CELLS){const s=spSprite(a.face);const sc=size/Math.max(s.bw,s.bh),dw=s.bw*sc,dh=s.bh*sc;
+    return '<span class="spr" style="width:'+size+'px;height:'+size+'px"><img src="'+s.u+'" style="width:'+dw.toFixed(1)+'px;height:'+dh.toFixed(1)+'px;left:'+((size-dw)/2).toFixed(1)+'px;top:'+(size-dh).toFixed(1)+'px"></span>';}
+  return badge(initials(nm),hue(nm),'av',size);}
 function champToken(n,size){return badge(initials(champName(n)),hue(n),'ctok',size);}
 // 5 role glyphs (Top/Jungle/Mid/Bot/Sup) as tiny inline SVG paths.
 const ROLE_PATH=['M8 3L14 13H2Z','M8 2L12 9H4Z M7 9h2v4H7z','M8 2L14 8 8 14 2 8Z','M2 3h12L8 13Z','M6 2h4v4h4v4h-4v4H6v-4H2V6h4z'];
@@ -271,6 +297,6 @@ function startPolling(){if(!/^https?:$/.test(location.protocol))return;
 // A <meta refresh> reload can drop the URL fragment; restore the route before rendering.
 const savedRoute=sessionStorage.getItem('hub_route');
 if(savedRoute&&savedRoute!=='#/'&&(!location.hash||location.hash==='#'||location.hash==='#/')){history.replaceState(null,'',savedRoute);}
-buildIndex();nav();router();
+buildIndex();nav();router();spInit();
 const sy=sessionStorage.getItem('hub_sy');if(sy)scrollTo(0,+sy);
 startPolling();
