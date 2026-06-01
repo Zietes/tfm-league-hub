@@ -68,8 +68,8 @@ const pct=(n,d)=>d?(100*n/d).toFixed(1)+'%':'—';
 // the per-game average) — confirmed: Helper rating 227 / (3 games × 10) = 7.57.
 const avgRating=(r,m)=>m?(r/(m*10)).toFixed(2):'—';
 const tName=id=>teamById[id]?teamById[id].name:'Team '+id;
-const tLink=id=>'<a href="#/team/'+id+'">'+teamLogo(id)+esc(tName(id))+'</a>';
-const aLink=id=>athById[id]?'<a href="#/player/'+id+'">'+avatar(id)+esc(athById[id].name)+'</a>':'#'+id;
+const tLink=(id,sz)=>'<a href="#/team/'+id+'">'+teamLogo(id,sz)+esc(tName(id))+'</a>';
+const aLink=(id,sz)=>athById[id]?'<a href="#/player/'+id+'">'+avatar(id,sz)+esc(athById[id].name)+'</a>':'#'+id;
 // Real champion icon via CSS sprite-crop of the game sheet, using window.CHAMP_FRAMES
 // (id -> {x,y,w,h,sw,sh}) + window.ICON_BASE. Absent (e.g. local broadcast page) -> ''.
 function champIcon(n,size,ground,extra){size=size||20;const F=window.CHAMP_FRAMES,f=F&&F[n];if(!f||!f.h)return champToken(n,size);
@@ -81,7 +81,7 @@ function champIcon(n,size,ground,extra){size=size||20;const F=window.CHAMP_FRAME
   // bottom-aligns (standing characters sit on the floor of the box, not floating).
   const s=size/Math.max(f.w,f.h),dw=f.w*s,dh=f.h*s,ox=(size-dw)/2,oy=ground?(size-dh):(size-dh)/2;
   return '<span class="cico'+(extra?' '+extra:'')+'" style="width:'+size+'px;height:'+size+'px"><i style="width:'+dw.toFixed(1)+'px;height:'+dh.toFixed(1)+'px;left:'+ox.toFixed(1)+'px;top:'+oy.toFixed(1)+'px;background-image:url(\''+(window.ICON_BASE||'')+'icons/champion/'+encodeURIComponent(n)+'.png\');background-size:'+(f.sw*s).toFixed(1)+'px '+(f.sh*s).toFixed(1)+'px;background-position:'+(-f.x*s).toFixed(1)+'px '+(-f.y*s).toFixed(1)+'px"></i></span>';}
-const cLink=n=>'<a href="#/champion/'+encodeURIComponent(n)+'">'+champIcon(n)+esc(champName(n))+'</a>';
+const cLink=(n,sz)=>'<a href="#/champion/'+encodeURIComponent(n)+'">'+champIcon(n,sz)+esc(champName(n))+'</a>';
 const lLink=id=>leagueById[id]?'<a href="#/league/'+id+'">'+esc(leagueById[id].name)+'</a>':('League '+id);
 // Inline-SVG sparkline. invert=true puts smaller values up top (for rank, where #1 is best).
 function spark(vals,invert,W,H){W=W||150;H=H||32;const P=4,n=vals?vals.length:0;if(n<2)return '<span class="sub">—</span>';
@@ -120,7 +120,7 @@ function vStandings(){
     h+='<tr'+(i===0?' class="lead"':'')+'><td>'+(i+1)+'</td><td>'+tLink(s.team_id)+'</td><td class="num"><b>'+s.points+'</b></td><td class="num">'+s.win+'</td><td class="num">'+s.lose+'</td><td class="num">'+pct(s.win,s.win+s.lose)+'</td><td class="num">'+s.set_win+'</td><td class="num">'+s.set_lose+'</td><td class="num">'+s.kill+'</td><td class="num">'+adj+'</td></tr>';});
   h+='</tbody></table>';});});mount(h);}
 function vTeams(){let h='<h1>Teams</h1><table class="s"><thead><tr><th>Team</th><th>Manager</th><th>League</th><th data-num>Fans</th><th data-num>Balance</th></tr></thead><tbody>';
-  D.teams.forEach(t=>{const l=leagueById[t.league_id];h+='<tr><td>'+tLink(t.id)+'</td><td>'+esc(t.manager)+'</td><td>'+lLink(t.league_id)+'</td><td class="num" data-s="'+t.fan_count+'">'+t.fan_count.toLocaleString()+'</td><td class="num" data-s="'+t.balance+'">'+money(t.balance)+'</td></tr>';});
+  D.teams.forEach(t=>{const l=leagueById[t.league_id];h+='<tr><td>'+tLink(t.id,40)+'</td><td>'+esc(t.manager)+'</td><td>'+lLink(t.league_id)+'</td><td class="num" data-s="'+t.fan_count+'">'+t.fan_count.toLocaleString()+'</td><td class="num" data-s="'+t.balance+'">'+money(t.balance)+'</td></tr>';});
   mount(h+'</tbody></table>');}
 function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</h1>');
   let rk=null,st=null;for(const c of (compsByLeague[t.league_id]||[])){const i=c.standings.findIndex(s=>s.team_id==id);if(i>=0){rk=i+1;st=c.standings[i];break;}}
@@ -153,7 +153,7 @@ function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</
     h+=tbl('Most picked',pks)+tbl('Most banned',bns)+'</div>';}
   mount(h);}
 function vPlayers(){let h='<h1>Players</h1><p class="sub">click a column to sort · '+D.athletes.length+' athletes</p><table class="s"><thead><tr><th>Player</th><th>Team</th><th data-num>Age</th><th data-num>M</th><th data-num>W</th><th data-num>Rating</th><th data-num>K</th><th data-num>D</th><th data-num>A</th><th data-num>MVP</th></tr></thead><tbody>';
-  D.athletes.forEach(a=>{h+='<tr><td>'+aLink(a.id)+'</td><td>'+(a.team_id!=null?tLink(a.team_id):'<span class="sub">FA</span>')+'</td><td class="num">'+a.age+'</td><td class="num">'+a.matches+'</td><td class="num">'+a.wins+'</td><td class="num">'+avgRating(a.rating,a.matches)+'</td><td class="num">'+a.kills+'</td><td class="num">'+a.deaths+'</td><td class="num">'+a.assists+'</td><td class="num">'+a.mvp+'</td></tr>';});
+  D.athletes.forEach(a=>{h+='<tr><td>'+aLink(a.id,40)+'</td><td>'+(a.team_id!=null?tLink(a.team_id):'<span class="sub">FA</span>')+'</td><td class="num">'+a.age+'</td><td class="num">'+a.matches+'</td><td class="num">'+a.wins+'</td><td class="num">'+avgRating(a.rating,a.matches)+'</td><td class="num">'+a.kills+'</td><td class="num">'+a.deaths+'</td><td class="num">'+a.assists+'</td><td class="num">'+a.mvp+'</td></tr>';});
   mount(h+'</tbody></table>');}
 function vPlayer(id){const a=athById[id];if(!a)return mount('<h1>Player not found</h1>');
   const kda=a.deaths?((a.kills+a.assists)/a.deaths).toFixed(2):(a.kills+a.assists?'∞':'—');
@@ -189,7 +189,7 @@ function vTierList(){const ranked=D.champions.map(c=>({c,m:champMeta(c)})).filte
     h+='<div class="tier"><span class="tlab tier-'+t+'">'+t+'</span><span class="tch">'+row.map(x=>'<span class="tchip" title="presence '+x.m.pres.toFixed(0)+'% · win '+x.m.wr.toFixed(0)+'%"><a href="#/champion/'+encodeURIComponent(x.c.name)+'">'+champIcon(x.c.name,30,true,'show')+esc(champName(x.c.name))+'</a></span>').join('')+'</span></div>';}
   return h;}
 function vChampions(){const g=D.champions[0]?D.champions[0].games:0;let h='<h1>Champions</h1><p class="sub">pick/ban/win over last '+g+' games · click to sort</p>'+vTierList()+'<table class="s"><thead><tr><th>Champion</th><th data-num>Picks</th><th data-num>Pick%</th><th data-num>Bans</th><th data-num>Ban%</th><th data-num>Pres%</th><th data-num>Win%</th></tr></thead><tbody>';
-  D.champions.forEach(c=>{const pr=c.games?100*(c.picks+c.bans)/c.games:0;h+='<tr><td>'+cLink(c.name)+'</td><td class="num">'+c.picks+'</td><td class="num" data-s="'+(c.games?c.picks/c.games:0)+'">'+pct(c.picks,c.games)+'</td><td class="num">'+c.bans+'</td><td class="num" data-s="'+(c.games?c.bans/c.games:0)+'">'+pct(c.bans,c.games)+'</td><td class="num" data-s="'+pr+'">'+pr.toFixed(1)+'%</td><td class="num" data-s="'+(c.picks?c.wins/c.picks:0)+'">'+pct(c.wins,c.picks)+'</td></tr>';});
+  D.champions.forEach(c=>{const pr=c.games?100*(c.picks+c.bans)/c.games:0;h+='<tr><td>'+cLink(c.name,40)+'</td><td class="num">'+c.picks+'</td><td class="num" data-s="'+(c.games?c.picks/c.games:0)+'">'+pct(c.picks,c.games)+'</td><td class="num">'+c.bans+'</td><td class="num" data-s="'+(c.games?c.bans/c.games:0)+'">'+pct(c.bans,c.games)+'</td><td class="num" data-s="'+pr+'">'+pr.toFixed(1)+'%</td><td class="num" data-s="'+(c.picks?c.wins/c.picks:0)+'">'+pct(c.wins,c.picks)+'</td></tr>';});
   mount(h+'</tbody></table>');}
 function vChampion(name){const c=champByName[name];
   const stats=c?[statCell('Games',c.games),statCell('Pick%',pct(c.picks,c.games)),statCell('Ban%',pct(c.bans,c.games)),statCell('Win%',pct(c.wins,c.picks),c.picks&&c.wins/c.picks>=0.5?'pos':(c.picks?'neg':''))]:[];
