@@ -420,12 +420,38 @@ function articleBody(it,i){i=i||0;const sc=newsScope(it);let h=null;
 function articleExcerpt(it,i){
   // Drop crest/badge/avatar spans first — their initials are TEXT, so a bare stripTags
   // would leave "DGDead Game"; the logo (.cico) / sprite (.spr) spans hold no text.
-  const h=String(articleBody(it,i)||resolveNews(it)||'').replace(/<span class="(?:crest|badge|avatar)[^"]*"[^>]*>[^<]*<\/span>/g,'');
+  const h=String(articleBody(it,i)||headline(it,i)||'').replace(/<span class="(?:crest|badge|avatar)[^"]*"[^>]*>[^<]*<\/span>/g,'');
   return clip(stripTags(h),190);}
+// Synthesize a plain-text headline from our data (accurate where the game's wording isn't,
+// and available even on the in-game page where NEWS_TEXT — the i18n table — is absent).
+function synthHead(it,i){const sc=newsScope(it);
+  if(sc==='match_report'||sc==='match'){const A=teamBind(it,'MyTeam'),B=teamBind(it,'EnemyTeam');if(!A||!B)return null;
+    const as=+bindVal(it,'MyScore')||0,bs=+bindVal(it,'EnemyScore')||0,aWon=as>=bs,W=aWon?A:B,L=aWon?B:A,ws=Math.max(as,bs),ls=Math.min(as,bs);
+    const wr=teamRank(W.id),lr=teamRank(L.id),upset=!!(wr&&lr&&wr.rank>=lr.rank+3),close=(ws-ls)<=1;
+    const V=aWon?(upset?['stun','shock','upset']:close?['edge','outlast','hold off']:['take down','dispatch','roll past'])
+               :(close?['fall just short to','are edged by','drop a close one to']:['fall to','are routed by','go down to']);
+    return A.name+' '+pick(V,i)+' '+B.name+' '+as+'–'+bs;}
+  if(sc==='pre_match'||sc==='pre_match_analysis'){const A=teamBind(it,'Team')||teamByName[String(bindVal(it,'TeamName')||'').toLowerCase()],B=teamBind(it,'EnemyTeam');
+    if(A&&B)return A.name+' '+pick(['meet','face','clash with','take on'],i)+' '+B.name;
+    if(A)return A.name+' '+pick(['look ahead to the next test','eye a bounce-back','prep for match day'],i);return null;}
+  if(sc==='player'){const a=athBind(it);if(!a||a.matches<1)return null;
+    return a.name+' '+pick(['catches fire','is in form','keeps rolling'],i)+(a.team_id!=null&&teamById[a.team_id]?' for '+teamById[a.team_id].name:'');}
+  if(sc==='transfer'||sc==='transfer_gossip'||sc==='recruit_to_other_team'){const buy=teamBind(it,'BuyTeam'),ath=athBind(it);
+    if(buy&&ath)return ath.name+' '+pick(['joins','signs for','heads to'],i)+' '+buy.name;
+    const T=teamBind(it,'Team'),pos=bindVal(it,'Position');if(T&&pos)return T.name+' eye '+pos+' depth';return null;}
+  if(sc==='season'||sc==='international_seed'){const T=teamBind(it,'Team')||teamByName[String(bindVal(it,'TeamName')||'').toLowerCase()];
+    if(T)return T.name+' '+pick(['open their campaign','set their sights on the season','eye a climb'],i);return null;}
+  return null;}
+// Pick the headline: for match scopes the game's own wording can misstate the winner →
+// always prefer our synthesized line; otherwise keep the game's (topical, colourful)
+// headline when present, and fall back to synthesis (covers the NEWS_TEXT-less in-game page).
+function headline(it,i){const sc=newsScope(it);
+  if(sc==='match_report'||sc==='match'){const s=synthHead(it,i);if(s)return s;}
+  return resolveNews(it)||synthHead(it,i);}
 function clip(s,n){s=String(s||'');return s.length>n?s.slice(0,n-1).replace(/\s+\S*$/,'')+'…':s;}
 const OFFICE_TAGS={transfer:'Transfer',transfer_gossip:'Transfer',recruit_to_other_team:'Transfer',match:'Match',match_report:'Match',pre_match:'Preview',pre_match_analysis:'Preview',meta:'Meta',player:'Player',fan:'Fans',finance:'Finance',scout:'Scouting',training:'Training',training_report:'Training',facility:'Facility',league:'League',international_seed:'League',season:'Season',merch:'Merch',author:'Op-Ed',decision:'Roster',start_team:'League',start_recruit:'Recruiting',end_recruit:'Recruiting',solo_rank_report:'Solo Rank',alert:'Alert'};
-function deskOffice(limit){if(!window.NEWS_TEXT||!D.news||!D.news.length)return [];const out=[];
-  for(let idx=0;idx<D.news.length;idx++){const it=D.news[idx],head=resolveNews(it);if(!head)continue;
+function deskOffice(limit){if(!D.news||!D.news.length)return [];const out=[];
+  for(let idx=0;idx<D.news.length;idx++){const it=D.news[idx],head=headline(it,idx);if(!head)continue;
     out.push({head,body:articleExcerpt(it,idx),by:it.by,date:it.date,tag:OFFICE_TAGS[newsScope(it)]||'League',idx});
     if(out.length>=limit)break;}
   return out;}
@@ -444,7 +470,7 @@ function vNews(){
   mount(h);
 }
 function vArticle(i){const it=D.news&&D.news[+i];if(!it)return mount('<h1>Article not found</h1><p class="sub"><a href="#/news">← Back to the Newsroom</a></p>');
-  const head=resolveNews(it)||'(untitled)',body=articleBody(it,+i);
+  const head=headline(it,+i)||'(untitled)',body=articleBody(it,+i);
   let h='<p class="sub"><a href="#/news">← Newsroom</a></p>';
   h+='<span class="ntag">'+esc(OFFICE_TAGS[newsScope(it)]||'League')+'</span><h1>'+esc(head)+'</h1>';
   h+='<p class="byline">— '+esc(it.by)+(it.date?' · '+esc(it.date):'')+'</p>';
