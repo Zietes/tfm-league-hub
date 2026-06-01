@@ -175,6 +175,9 @@ function vPlayer(id){const a=athById[id];if(!a)return mount('<h1>Player not foun
   if(a.seasons&&a.seasons.length){h+='<h2>Season history</h2><table class="s"><thead><tr><th data-num>Year</th><th>Role</th><th data-num>M</th><th data-num>W</th><th data-num>Win%</th><th>KDA</th><th data-num>Rating</th><th data-num>MVP</th></tr></thead><tbody>';
     a.seasons.forEach(se=>se.positions.forEach(p=>{h+='<tr><td class="num">'+se.year+'</td><td>'+roleTag(p.position)+'</td><td class="num">'+p.matches+'</td><td class="num">'+p.wins+'</td><td class="num">'+pct(p.wins,p.matches)+'</td><td class="num">'+p.kills+'/'+p.deaths+'/'+p.assists+'</td><td class="num">'+avgRating(p.rating,p.matches)+'</td><td class="num">'+p.mvp+'</td></tr>';}));
     h+='</tbody></table>';}
+  const tr=(D.transfers||[]).filter(t=>t.athlete_id==id);
+  if(tr.length){h+='<h2>Career <small>transfer history</small></h2><table class="s"><thead><tr><th>Date</th><th>From</th><th>To</th><th data-num>Fee</th><th data-num>Salary</th></tr></thead><tbody>'+
+    tr.map(t=>'<tr><td class="sub">'+esc(t.date||'')+'</td><td>'+(t.from!=null?tLink(t.from):'<span class="sub">debut</span>')+'</td><td>'+tLink(t.to)+'</td><td class="num">'+(t.fee>0?money(t.fee):'—')+'</td><td class="num">'+(t.salary>0?money(t.salary)+'/wk':'—')+'</td></tr>').join('')+'</tbody></table>';}
   const log=[];D.matches.forEach(m=>{const p=m.picks.find(p=>p.athlete_id==id);if(p){const won=p.blue===m.blue_win;const opp=p.blue?m.red_team_id:m.blue_team_id;log.push({m,p,won,opp});}});
   if(log.length){h+='<h2>Match log</h2><table><thead><tr><th>Champion</th><th>Role</th><th>Opponent</th><th>Result</th></tr></thead><tbody>';
     log.forEach(x=>{h+='<tr><td>'+cLink(x.p.champion)+'</td><td>'+roleTag(x.p.position)+'</td><td>'+tLink(x.opp)+'</td><td class="'+(x.won?'win':'loss')+'"><a href="#/match/'+x.m.id+'">'+(x.won?'Win':'Loss')+'</a></td></tr>';});h+='</tbody></table>';}
@@ -306,27 +309,60 @@ function deskPlayers(limit){const out=[];const e=D.athletes.filter(a=>a.matches>
   const m=[...e].sort((a,b)=>b.mvp-a.mvp)[0];if(m&&m.mvp>0&&(!por||m.id!==por.id))out.push({head:m.name+' is collecting hardware',blurb:m.name+' has claimed '+m.mvp+' MVP'+(m.mvp>1?'s':'')+' so far this season.',tag:'Player',link:'#/player/'+m.id,score:62,desk:'Player Spotlight'});
   const k=[...e].filter(a=>a.deaths>0).sort((a,b)=>((b.kills+b.assists)/b.deaths)-((a.kills+a.assists)/a.deaths))[0];if(k&&(!por||k.id!==por.id)&&(!m||k.id!==m.id))out.push({head:k.name+' is nearly unkillable',blurb:k.name+' sports a league-best '+((k.kills+k.assists)/k.deaths).toFixed(1)+' KDA.',tag:'Player',link:'#/player/'+k.id,score:50,desk:'Player Spotlight'});
   return out.slice(0,limit);}
+function deskTransfers(limit){const out=[];if(!D.transfers||!D.transfers.length)return out;
+  for(const t of D.transfers){const a=athById[t.athlete_id],who=a?a.name:('Player #'+t.athlete_id);
+    const to=tName(t.to),from=t.from!=null?tName(t.from):null;
+    const fee=(t.fee>0)?(' for '+money(t.fee)):(from?' on a free transfer':'');
+    const head=from?(who+': '+from+' → '+to):(who+' signs with '+to);
+    const blurb=(from?(who+' moves from '+from+' to '+to+fee):(who+' joins '+to))+(t.salary>0?(' · '+money(t.salary)+'/wk'):'')+'.';
+    out.push({head,blurb,tag:'Transfer',link:'#/player/'+t.athlete_id,score:(t.fee||0)+1,desk:'Transfers'});
+    if(out.length>=limit)break;}
+  return out;}
 // Game-native news: resolve a title key against window.NEWS_TEXT + substitute {binds}.
 function newsText(key){let o=window.NEWS_TEXT;if(!o)return null;for(const k of String(key).split('.')){if(o==null)return null;o=o[k];}return typeof o==='string'?o:null;}
-function resolveNews(it){let t=newsText(it.title);if(t==null)return null;(it.tb||[]).forEach(p=>{t=t.split('{'+p[0]+'}').join(p[1]);});return t;}
+// Game i18n carries inline markup (<#rrggbbaa>…<> colour spans etc.) — strip it so it
+// doesn't render as literal text once esc()'d.
+function stripTags(s){return String(s==null?'':s).replace(/<[^>]*>/g,'');}
+function resolveNews(it){let t=newsText(it.title);if(t==null)return null;(it.tb||[]).forEach(p=>{t=t.split('{'+p[0]+'}').join(p[1]);});return stripTags(t);}
+function resolveBody(it){if(!it.body)return null;let t=newsText(it.body);if(t==null)return null;(it.body_tb||[]).forEach(p=>{t=t.split('{'+p[0]+'}').join(p[1]);});return stripTags(t);}
+function clip(s,n){s=String(s||'');return s.length>n?s.slice(0,n-1).replace(/\s+\S*$/,'')+'…':s;}
 const OFFICE_TAGS={transfer:'Transfer',match:'Match',pre_match:'Preview',meta:'Meta',player:'Player',fan:'Fans',finance:'Finance',scout:'Scouting',training:'Training',facility:'Facility',league:'League',season:'Season',merch:'Merch',author:'Op-Ed',start_team:'League',start_recruit:'Recruiting',solo_rank_report:'Solo Rank'};
 function deskOffice(limit){if(!window.NEWS_TEXT||!D.news||!D.news.length)return [];const out=[];
-  for(const it of D.news){const head=resolveNews(it);if(!head)continue;const seg=it.title.split('.');const scope=seg[0]==='article'?seg[1]:seg[0];
-    out.push({head,blurb:'— '+it.by+(it.date?' · '+it.date:''),tag:OFFICE_TAGS[scope]||'League',link:it.team!=null?'#/team/'+it.team:'#/news'});
+  for(let idx=0;idx<D.news.length;idx++){const it=D.news[idx],head=resolveNews(it);if(!head)continue;
+    const seg=it.title.split('.'),scope=seg[0]==='article'?seg[1]:seg[0];
+    out.push({head,body:resolveBody(it),by:it.by,date:it.date,tag:OFFICE_TAGS[scope]||'League',idx});
     if(out.length>=limit)break;}
   return out;}
 function vNews(){
-  const R=deskResults(4),S=deskStandings(4),M=deskMeta(3),P=deskPlayers(3),all=[...R,...S,...M,...P];
+  const R=deskResults(4),S=deskStandings(4),M=deskMeta(3),P=deskPlayers(3),T=deskTransfers(4),all=[...R,...S,...M,...P,...T];
   let lead=null;all.forEach(s=>{if(!lead||s.score>lead.score)lead=s;});
   let h=heroHeader('','Newsroom','The League Wire','Reports from across the leagues · '+(D.today||('#'+(D.updated||0))),[]);
   if(!all.length)h+='<p class="sub">No stories yet — play out some matches and the desks will fill in.</p>';
   if(lead)h+='<a class="lead-story" href="'+lead.link+'"><span class="ntag '+(lead.cls||'')+'">'+lead.tag+'</span><div class="lead-h">'+esc(lead.head)+'</div><p>'+esc(lead.blurb)+'</p><span class="byline">— The '+lead.desk+' Desk</span></a>';
   const card=s=>'<a class="ncard" href="'+s.link+'"><span class="ntag '+(s.cls||'')+'">'+s.tag+'</span><div class="nhead">'+esc(s.head)+'</div><div class="nblurb">'+esc(s.blurb)+'</div></a>';
   const desk=(title,route,list)=>{const ls=list.filter(s=>s!==lead).slice(0,3);if(!ls.length)return '';return '<section class="ndesk"><div class="ndesk-h"><h2>'+title+'</h2><a class="more" href="'+route+'">more →</a></div>'+ls.map(card).join('')+'</section>';};
-  h+='<div class="nroom">'+desk('Results','#/matches',R)+desk('Standings','#/standings',S)+desk('Meta Watch','#/champions',M)+desk('Player Spotlight','#/players',P)+'</div>';
+  h+='<div class="nroom">'+desk('Results','#/matches',R)+desk('Standings','#/standings',S)+desk('Transfers','#/transfers',T)+desk('Meta Watch','#/champions',M)+desk('Player Spotlight','#/players',P)+'</div>';
   const office=deskOffice(8);
-  if(office.length)h+='<section class="ndesk office"><div class="ndesk-h"><h2>From the League Office <small>straight off the game wire</small></h2></div><div class="owrap">'+office.map(card).join('')+'</div></section>';
+  if(office.length){const ocard=s=>'<a class="ncard" href="#/article/'+s.idx+'"><span class="ntag">'+esc(s.tag)+'</span><div class="nhead">'+esc(s.head)+'</div>'+(s.body?'<div class="nblurb">'+esc(clip(s.body,200))+'</div>':'')+'<span class="byline">— '+esc(s.by)+(s.date?' · '+esc(s.date):'')+'</span></a>';
+    h+='<section class="ndesk office"><div class="ndesk-h"><h2>From the League Office <small>straight off the game wire</small></h2></div><div class="owrap">'+office.map(ocard).join('')+'</div></section>';}
   mount(h);
+}
+function vArticle(i){const it=D.news&&D.news[+i];if(!it)return mount('<h1>Article not found</h1><p class="sub"><a href="#/news">← Back to the Newsroom</a></p>');
+  const head=resolveNews(it)||'(untitled)',body=resolveBody(it);
+  const seg=it.title.split('.'),scope=seg[0]==='article'?seg[1]:seg[0];
+  let h='<p class="sub"><a href="#/news">← Newsroom</a></p>';
+  h+='<span class="ntag">'+esc(OFFICE_TAGS[scope]||'League')+'</span><h1>'+esc(head)+'</h1>';
+  h+='<p class="byline">— '+esc(it.by)+(it.date?' · '+esc(it.date):'')+'</p>';
+  h+=body?('<p class="article-body">'+esc(body)+'</p>'):'<p class="sub">No further detail on the wire.</p>';
+  if(it.team!=null&&teamById[it.team])h+='<p>Related: '+tLink(it.team)+'</p>';
+  mount(h);
+}
+function vTransfers(){const ts=D.transfers||[];
+  let h='<h1>Transfers</h1><p class="sub">'+ts.length+' recent move'+(ts.length===1?'':'s')+' across the leagues</p>';
+  if(!ts.length)return mount(h+'<p class="sub">No transfers recorded yet — they accrue as the season runs.</p>');
+  h+='<table class="s"><thead><tr><th>Date</th><th>Player</th><th>From</th><th>To</th><th data-num>Fee</th><th data-num>Salary</th></tr></thead><tbody>';
+  ts.forEach(t=>{h+='<tr><td class="sub">'+esc(t.date||'')+'</td><td>'+aLink(t.athlete_id)+'</td><td>'+(t.from!=null?tLink(t.from):'<span class="sub">debut</span>')+'</td><td>'+tLink(t.to)+'</td><td class="num" data-s="'+(t.fee||0)+'">'+(t.fee>0?money(t.fee):'—')+'</td><td class="num" data-s="'+(t.salary||0)+'">'+(t.salary>0?money(t.salary)+'/wk':'—')+'</td></tr>';});
+  mount(h+'</tbody></table>');
 }
 function vSearch(q){q=String(q||'').toLowerCase();
   const tm=D.teams.filter(t=>t.name.toLowerCase().includes(q)).slice(0,40);
@@ -336,13 +372,14 @@ function vSearch(q){q=String(q||'').toLowerCase();
   h+='<h2>Players</h2><div class="chips">'+(pl.map(a=>'<span>'+aLink(a.id)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   h+='<h2>Champions</h2><div class="chips">'+(ch.map(c=>'<span>'+cLink(c.name)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';mount(h);}
 function setActiveNav(){const seg=location.hash.replace(/^#\/?/,'').split('/')[0]||'';
-  const m={'':'#/',news:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players',champions:'#/champions',champion:'#/champions',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
+  const m={'':'#/',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players',champions:'#/champions',champion:'#/champions',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
   const want=m[seg]||'#/';document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')===want));}
 function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);
   switch(p[0]){case '':return vStandings();case 'news':return vNews();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
     case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'champions':return vChampions();
     case 'champion':return vChampion(p.slice(1).join('/'));case 'matches':return vMatches();case 'match':return vMatch(+p[1]);
     case 'leagues':return vLeagues();case 'league':return vLeague(+p[1]);
+    case 'article':return vArticle(p[1]);case 'transfers':return vTransfers();
     case 'search':return vSearch(p.slice(1).join('/'));default:return vStandings();}}
 const curHash=()=>(location.hash&&location.hash!=='#')?location.hash:'#/';
 addEventListener('hashchange',()=>{sessionStorage.setItem('hub_route',curHash());router();scrollTo(0,0);});
