@@ -15,6 +15,15 @@ function buildIndex(){
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 const cap=w=>w?w[0].toUpperCase()+w.slice(1):'';
 const champName=id=>String(id).split('_').map(cap).join(' ');
+// region_id -> name (from the bundle's text/ui `region.N`; there is no regions table at runtime).
+const REGION_NAMES=['Korea','China','Europe','North America','South America','Japan'];
+const regionName=id=>REGION_NAMES[id]||('Region '+id);
+// Enum to_index() -> label (from text/ui, declaration order = worst→best for satisfaction,
+// low→high tier for expectation; matches a top team sitting "Dissatisfied" on an 0–2 start).
+const FAN_SAT=['Very Dissatisfied','Dissatisfied','Normal','Satisfied','Very Satisfied'];
+const FAN_EXP=['Bottom Tier','Lower Tier','Mid Tier','Upper Tier','Top Tier'];
+const fanSat=i=>FAN_SAT[i]||('Lv '+i);
+const fanExp=i=>FAN_EXP[i]||('Lv '+i);
 // --- generated iconography (deterministic, offline; also the real-art fallback) ---
 function hue(s){let h=0;s=String(s);for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h%360;}
 function initials(s){s=String(s||'').trim();const w=s.split(/[\s_]+/).filter(Boolean);
@@ -142,7 +151,7 @@ function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</
   if(f){h+='<h2>Business &amp; finances</h2>';
     h+='<div class="kv"><div>Transfer budget <b>'+money(f.transfer_budget)+'</b></div><div>Salary budget <b>'+money(f.salary_budget)+'</b></div><div>Scout budget <b>'+money(f.scout_budget)+'</b></div><div>Popularity <b>'+(f.popularity||0)+'</b></div><div>Fan momentum <b class="'+(f.fan_momentum>0?'pos':f.fan_momentum<0?'neg':'')+'">'+(f.fan_momentum>0?'+':'')+(f.fan_momentum||0)+'</b></div></div>';
     h+='<div class="kv"><div>🏟️ '+esc(f.stadium_name||'Stadium')+' <b>cap '+(f.stadium_capacity||0).toLocaleString()+'</b> · grade <b>'+grade(f.stadium_grade)+'</b></div><div>Home gate <b>'+money(f.entrance_income)+'</b> / '+(f.home_matches||0)+' games</div><div>Attendance <b>'+(f.home_attendance||0).toLocaleString()+'</b></div></div>';
-    h+='<div class="kv"><div>Training facility <b>'+grade(f.training_grade)+'</b></div><div>Merch facility <b>'+grade(f.merch_grade)+'</b></div><div>Gaming house <b>'+grade(f.gaming_house)+'</b></div><div>Fan satisfaction <b>'+(f.fan_satisfaction??0)+'</b></div><div>Fan expectation <b>'+(f.fan_expectation??0)+'</b></div></div>';}
+    h+='<div class="kv"><div>Training facility <b>'+grade(f.training_grade)+'</b></div><div>Merch facility <b>'+grade(f.merch_grade)+'</b></div><div>Gaming house <b>'+grade(f.gaming_house)+'</b></div><div>Fan satisfaction <b class="'+(f.fan_satisfaction>=3?'pos':f.fan_satisfaction<=1?'neg':'')+'">'+esc(fanSat(f.fan_satisfaction))+'</b></div><div>Fan expectation <b>'+esc(fanExp(f.fan_expectation))+'</b></div></div>';}
   h+='<h2>Roster</h2><table><thead><tr><th>Role</th><th>Player</th><th>Recent champions</th></tr></thead><tbody>';
   t.roster.forEach((aid,i)=>{const a=aid!=null?athById[aid]:null;h+='<tr><td>'+(POS[i]||('P'+i))+'</td><td>'+(a?aLink(aid):'—')+'</td><td class="chips">'+(a?a.recent_champions.map(c=>'<span>'+cLink(c)+'</span>').join(''):'')+'</td></tr>';});
   h+='</tbody></table>';
@@ -172,10 +181,10 @@ function vPlayer(id){const a=athById[id];if(!a)return mount('<h1>Player not foun
   if(a.dislikes&&a.dislikes.length)h+='<h2>Disliked champions <small>👎</small></h2><div class="chips">'+a.dislikes.map(c=>'<span>'+cLink(c)+'</span>').join('')+'</div>';
   if(a.pos){const PD=[['Top','top',0],['Jungle','jungle',1],['Mid','mid',2],['Bot','bottom',3],['Sup','support',4]].filter(d=>(a.pos[d[1]]||0)>0);
     if(PD.length){h+='<h2>Positions</h2><table>'+PD.map(d=>{const v=a.pos[d[1]]||0,st=Math.round(v/20);return '<tr><td>'+roleIcon(d[2])+d[0]+'</td><td class="num">'+v+'</td><td>'+'★'.repeat(st)+'<span class="sub">'+'☆'.repeat(5-st)+'</span></td></tr>';}).join('')+'</table>';}}
-  if(a.languages&&a.languages.length)h+='<h2>Communication</h2><div class="chips">'+a.languages.map(l=>{const st=Math.round((l.prof||0)/20);return '<span>Region '+l.region+' '+'★'.repeat(st)+'<span class="sub">'+'☆'.repeat(5-st)+'</span></span>';}).join('')+'</div>';
+  if(a.languages&&a.languages.length)h+='<h2>Communication</h2><div class="chips">'+a.languages.map(l=>{const st=Math.round((l.prof||0)/20);return '<span>'+esc(regionName(l.region))+' '+'★'.repeat(st)+'<span class="sub">'+'☆'.repeat(5-st)+'</span></span>';}).join('')+'</div>';
   if(a.attr){h+='<h2>Attributes</h2><table>'+ATTR_DEFS.map(d=>{const v=a.attr[d[1]]||0;return '<tr><td>'+d[0]+'</td><td class="num">'+v+'</td><td><div class="bar"><i style="width:'+(100*v/ATTR_MAX).toFixed(0)+'%"></i></div></td></tr>';}).join('')+'</table>';}
   if(a.soloranks&&a.soloranks.length){h+='<h2>Solo rank</h2><table class="s"><thead><tr><th>Region</th><th data-num>Rating</th><th data-num>W</th><th data-num>L</th><th data-num>Win%</th></tr></thead><tbody>'+
-    a.soloranks.map(s=>'<tr><td>Region '+s.region+'</td><td class="num"><b>'+s.rating+'</b></td><td class="num">'+s.wins+'</td><td class="num">'+s.losses+'</td><td class="num">'+pct(s.wins,s.wins+s.losses)+'</td></tr>').join('')+'</tbody></table>';}
+    a.soloranks.map(s=>'<tr><td>'+esc(regionName(s.region))+'</td><td class="num"><b>'+s.rating+'</b></td><td class="num">'+s.wins+'</td><td class="num">'+s.losses+'</td><td class="num">'+pct(s.wins,s.wins+s.losses)+'</td></tr>').join('')+'</tbody></table>';}
   if(a.seasons&&a.seasons.length){h+='<h2>Season history</h2><table class="s"><thead><tr><th data-num>Year</th><th>Role</th><th data-num>M</th><th data-num>W</th><th data-num>Win%</th><th>KDA</th><th data-num>Rating</th><th data-num>MVP</th></tr></thead><tbody>';
     a.seasons.forEach(se=>se.positions.forEach(p=>{h+='<tr><td class="num">'+se.year+'</td><td>'+roleTag(p.position)+'</td><td class="num">'+p.matches+'</td><td class="num">'+p.wins+'</td><td class="num">'+pct(p.wins,p.matches)+'</td><td class="num">'+p.kills+'/'+p.deaths+'/'+p.assists+'</td><td class="num">'+avgRating(p.rating,p.matches)+'</td><td class="num">'+p.mvp+'</td></tr>';}));
     h+='</tbody></table>';}
