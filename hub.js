@@ -122,7 +122,11 @@ function makeSortable(t){[...t.tHead.rows[0].cells].forEach((th,i)=>{if('nosort'
   th.onclick=()=>{const tb=t.tBodies[0];const rows=[...tb.rows];const dir=th._d=-(th._d||1);const num='num' in th.dataset;
     rows.sort((a,b)=>{let x=a.cells[i].dataset.s??a.cells[i].textContent,y=b.cells[i].dataset.s??b.cells[i].textContent;if(num){x=parseFloat(x)||0;y=parseFloat(y)||0;}else{x=(''+x).toLowerCase();y=(''+y).toLowerCase();}return x<y?dir:x>y?-dir:0;});
     rows.forEach(r=>tb.appendChild(r));};});}
-function mount(html){const app=document.getElementById('app');app.innerHTML=html;app.querySelectorAll('table.s').forEach(makeSortable);}
+let _reveal=false;
+function mount(html){const app=document.getElementById('app');app.innerHTML=html;app.querySelectorAll('table.s').forEach(makeSortable);
+  // Replay the staggered entrance only on real navigation (go()), never on the 20s data-refresh
+  // re-render (would be a jarring fade every tick) — so clear the class when not revealing.
+  if(_reveal){app.classList.remove('reveal');void app.offsetWidth;app.classList.add('reveal');}else app.classList.remove('reveal');}
 function nav(){document.getElementById('nav').innerHTML='<span class="brand">🏆 League Hub</span>'+
   '<a href="#/">Home</a><a href="#/standings">Standings</a><a href="#/news">News</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/matches">Matches</a>'+
   '<input id="q" placeholder="Search teams, players, champions…"><span class="upd">#'+(D.updated||0)+'</span>';
@@ -163,7 +167,7 @@ function vHome(){
   tiles+=tile('#/matches','Matches',lastM?esc(tName(lastM.blue_win?lastM.blue_team_id:lastM.red_team_id))+' won':'Results',lastM?'latest result':'recent games',lastM?teamLogo(lastM.blue_win?lastM.blue_team_id:lastM.red_team_id,40):'');
   tiles+=tile('#/news','Newsroom',feat?esc(clip(feat.head,34)):'The Wire','synthesized desks & wire','','📰');
   tiles+=tile('#/teams','Teams',D.teams.length+' clubs','rosters, finances & form','','🛡️');
-  h+='<section class="home-sec"><div class="sec-h"><h3>Explore the Hub</h3></div><div class="tiles">'+tiles+'</div></section>';
+  h+='<section class="home-sec explore"><div class="sec-h"><h3>Explore the Hub</h3></div><div class="tiles">'+tiles+'</div></section>';
   mount(h);
 }
 function vStandings(){
@@ -591,7 +595,7 @@ function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split
     case 'article':return vArticle(p[1]);case 'transfers':return vTransfers();
     case 'search':return vSearch(p.slice(1).join('/'));default:return vStandings();}}
 const curHash=()=>(location.hash&&location.hash!=='#')?location.hash:'#/';
-addEventListener('hashchange',()=>{sessionStorage.setItem('hub_route',curHash());router();scrollTo(0,0);});
+addEventListener('hashchange',()=>{sessionStorage.setItem('hub_route',curHash());go();scrollTo(0,0);});
 addEventListener('beforeunload',()=>{sessionStorage.setItem('hub_route',curHash());sessionStorage.setItem('hub_sy',scrollY);});
 function setUpd(){const u=document.querySelector('#nav .upd');if(u)u.textContent='#'+(D.updated||0);}
 // ===== "The Wire": a persistent right rail of live, glanceable widgets (fills the
@@ -601,27 +605,67 @@ function ensureLayout(){const app=document.getElementById('app');if(!app||(app.p
   const shell=document.createElement('div');shell.className='shell';
   app.parentNode.insertBefore(shell,app);shell.appendChild(app);
   const rail=document.createElement('aside');rail.id='rail';shell.appendChild(rail);}
+const railWireItem=s=>'<a class="wire-i" href="'+s.link+'"><span class="ntag '+(s.cls||'')+'">'+esc(s.tag)+'</span><span class="wire-t">'+esc(s.head)+'</span></a>';
+const railCard=(title,more,route,inner)=>inner?('<section class="rc"><div class="rc-h">'+title+(route?'<a class="rc-more" href="'+route+'">'+more+'</a>':'')+'</div>'+inner+'</section>'):'';
+const rankRow=(href,art,name,val)=>'<a class="rk-i" href="'+href+'">'+art+'<span class="rk-nm">'+esc(name)+'</span>'+(val!=null&&val!==''?'<span class="rk-p">'+val+'</span>':'')+'</a>';
+// CONTEXT-AWARE: the rail tailors itself to the current route (team/player/league get a
+// bespoke sidebar), falling back to the global "wire" everywhere else.
 function renderRail(){const rail=document.getElementById('rail');if(!rail||typeof D==='undefined'||!D.teams)return;
-  const wireItem=s=>'<a class="wire-i" href="'+s.link+'"><span class="ntag '+(s.cls||'')+'">'+esc(s.tag)+'</span><span class="wire-t">'+esc(s.head)+'</span></a>';
-  const card=(title,more,route,inner)=>inner?('<section class="rc"><div class="rc-h">'+title+'<a class="rc-more" href="'+route+'">'+more+'</a></div>'+inner+'</section>'):'';
-  let h='';
-  // THE WIRE — a balanced events mix (results/transfers/standings); avoid cross-desk score-scale bias.
+  const p=location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);let h='';
+  if(p[0]==='team'&&teamById[+p[1]])h=railTeam(teamById[+p[1]]);
+  else if(p[0]==='player'&&athById[+p[1]])h=railPlayer(athById[+p[1]]);
+  else if(p[0]==='league'&&leagueById[+p[1]])h=railLeague(leagueById[+p[1]]);
+  rail.innerHTML=h||railGlobal();}
+function railGlobal(){let h='';
   const wire=[].concat(deskResults(3),deskTransfers(2),deskStandings(2)).filter(Boolean).slice(0,5);
   h+='<section class="rc"><div class="rc-h"><span class="livedot"></span>The Wire<a class="rc-more" href="#/news">newsroom →</a></div>'
-    +(wire.length?wire.map(wireItem).join(''):'<p class="sub" style="padding:11px 13px">Stories appear as matches play out.</p>')+'</section>';
-  // TOP OF THE TABLE — cross-league points leaders
+    +(wire.length?wire.map(railWireItem).join(''):'<p class="sub" style="padding:11px 13px">Stories appear as matches play out.</p>')+'</section>';
   const leaders=[];D.competitions.forEach(c=>{if(c.standings&&c.standings[0])leaders.push(c.standings[0]);});leaders.sort((a,b)=>b.points-a.points);
-  h+=card('Top of the Table','leagues →','#/leagues',leaders.slice(0,5).map((s,i)=>'<a class="rk-i" href="#/team/'+s.team_id+'"><span class="rk-n">'+(i+1)+'</span>'+teamLogo(s.team_id,22)+'<span class="rk-nm">'+esc(tName(s.team_id))+'</span><span class="rk-p">'+s.points+'</span></a>').join(''));
-  // META PULSE — hottest champions
-  h+=card('Meta Pulse','tier list →','#/champions',deskMeta(2).map(wireItem).join(''));
-  // IN FORM — top players by rating
+  h+=railCard('Top of the Table','leagues →','#/leagues',leaders.slice(0,5).map((s,i)=>'<a class="rk-i" href="#/team/'+s.team_id+'"><span class="rk-n">'+(i+1)+'</span>'+teamLogo(s.team_id,22)+'<span class="rk-nm">'+esc(tName(s.team_id))+'</span><span class="rk-p">'+s.points+'</span></a>').join(''));
+  h+=railCard('Meta Pulse','tier list →','#/champions',deskMeta(2).map(railWireItem).join(''));
   const form=D.athletes.filter(a=>a.matches>=3).sort((a,b)=>(b.rating/(b.matches*10))-(a.rating/(a.matches*10))).slice(0,4);
-  h+=card('In Form','players →','#/players',form.map(a=>'<a class="rk-i" href="#/player/'+a.id+'">'+avatar(a.id,22)+'<span class="rk-nm">'+esc(a.name)+'</span><span class="rk-p">'+avgRating(a.rating,a.matches)+'</span></a>').join(''));
-  rail.innerHTML=h;}
+  h+=railCard('In Form','players →','#/players',form.map(a=>rankRow('#/player/'+a.id,avatar(a.id,22),a.name,avgRating(a.rating,a.matches))).join(''));
+  return h;}
+function nextMatch(t){let best=null,bc=null;(compsByLeague[t.league_id]||[]).forEach(c=>{(c.sched||[]).forEach(m=>{if(m.done)return;
+  const r1=String(m.t1).match(/^Normal\((\d+)\)/),r2=String(m.t2).match(/^Normal\((\d+)\)/);let opp=null;
+  if(r1&&+r1[1]===t.id)opp=m.t2;else if(r2&&+r2[1]===t.id)opp=m.t1;else return;
+  if(!best||String(m.date)<String(best.date)){best=m;best.opp=opp;bc=c;}});});return best?{m:best,opp:best.opp,comp:bc}:null;}
+function railTeam(t){let h='';
+  let rk=null,st=null;for(const c of (compsByLeague[t.league_id]||[])){const i=c.standings.findIndex(s=>s.team_id==t.id);if(i>=0){rk=i+1;st=c.standings[i];break;}}
+  if(st)h+='<section class="rc"><div class="rc-h">'+esc(tName(t.id))+'<a class="rc-more" href="#/league/'+t.league_id+'">'+esc(lgName(t.league_id))+' →</a></div>'
+    +'<div class="rail-kpi"><div><span class="l">Rank</span><span class="v'+(rk===1?' gold':'')+'">#'+rk+'</span></div><div><span class="l">Record</span><span class="v">'+st.win+'–'+st.lose+'</span></div><div><span class="l">Points</span><span class="v">'+st.points+'</span></div></div></section>';
+  const nx=nextMatch(t);if(nx)h+=railCard('Next Up','schedule →','#/league/'+t.league_id,'<div class="rail-next"><span class="sub">'+esc(nx.m.date)+'</span><div>vs '+decodeRef(nx.opp,nx.comp)+'</div></div>');
+  const log=[];D.matches.forEach(m=>{if(log.length>=4)return;if(m.blue_team_id==t.id||m.red_team_id==t.id){const won=(m.blue_team_id==t.id)===m.blue_win;const opp=m.blue_team_id==t.id?m.red_team_id:m.blue_team_id;log.push({m,won,opp});}});
+  if(log.length)h+=railCard('Recent Form','','',log.map(x=>'<a class="rk-i" href="#/match/'+x.m.id+'"><span class="rk-n '+(x.won?'win':'loss')+'">'+(x.won?'W':'L')+'</span>'+teamLogo(x.opp,22)+'<span class="rk-nm">'+esc(tName(x.opp))+'</span></a>').join(''));
+  const squad=(t.roster||[]).filter(x=>x!=null);
+  if(squad.length)h+=railCard('Squad','team page →','#/team/'+t.id,squad.map(aid=>{const a=athById[aid];return rankRow('#/player/'+aid,avatar(aid,22),a?a.name:'#'+aid,a&&a.matches?avgRating(a.rating,a.matches):'');}).join(''));
+  const news=(D.news||[]).filter(n=>n.team==t.id).slice(0,3);
+  if(news.length)h+=railCard('Club News','newsroom →','#/news',news.map(n=>{const idx=D.news.indexOf(n);return '<a class="wire-i" href="#/article/'+idx+'"><span class="ntag">'+esc(OFFICE_TAGS[newsScope(n)]||'News')+'</span><span class="wire-t">'+esc(headline(n,idx))+'</span></a>';}).join(''));
+  return h||railGlobal();}
+function railPlayer(a){let h='';
+  const rated=D.athletes.filter(x=>x.matches>=3).sort((x,y)=>(y.rating/(y.matches*10))-(x.rating/(x.matches*10)));const rk=rated.findIndex(x=>x.id==a.id);
+  const kda=a.deaths?((a.kills+a.assists)/a.deaths).toFixed(2):'—';
+  h+='<section class="rc"><div class="rc-h">'+esc(a.name)+(a.team_id!=null?'<a class="rc-more" href="#/team/'+a.team_id+'">'+esc(tName(a.team_id))+' →</a>':'')+'</div>'
+    +'<div class="rail-kpi"><div><span class="l">Rating</span><span class="v">'+(a.matches?avgRating(a.rating,a.matches):'—')+'</span></div><div><span class="l">KDA</span><span class="v">'+kda+'</span></div><div><span class="l">MVP</span><span class="v">'+a.mvp+'</span></div></div>'
+    +(rk>=0?'<div class="rail-note">#'+(rk+1)+' of '+rated.length+' by rating</div>':'')+'</section>';
+  if(a.team_id!=null&&teamById[a.team_id]){const mates=(teamById[a.team_id].roster||[]).filter(x=>x!=null&&x!=a.id);
+    if(mates.length)h+=railCard('Teammates',esc(tName(a.team_id))+' →','#/team/'+a.team_id,mates.map(id=>{const m=athById[id];return rankRow('#/player/'+id,avatar(id,22),m?m.name:'#'+id,m&&m.matches?avgRating(m.rating,m.matches):'');}).join(''));}
+  const log=[];D.matches.forEach(m=>{if(log.length>=5)return;const pk=m.picks.find(x=>x.athlete_id==a.id);if(pk){const won=pk.blue===m.blue_win;log.push({m,pk,won});}});
+  if(log.length)h+=railCard('Recent Games','','',log.map(x=>'<a class="rk-i" href="#/match/'+x.m.id+'"><span class="rk-n '+(x.won?'win':'loss')+'">'+(x.won?'W':'L')+'</span>'+champIcon(x.pk.champion,22)+'<span class="rk-nm">'+esc(champName(x.pk.champion))+'</span></a>').join(''));
+  return h||railGlobal();}
+function railLeague(l){let h='';const comp=(compsByLeague[l.id]||[])[0];
+  if(comp&&comp.standings.length)h+=railCard('Title Race',esc(lgName(l))+' →','#/league/'+l.id,comp.standings.slice(0,5).map((s,i)=>'<a class="rk-i" href="#/team/'+s.team_id+'"><span class="rk-n'+(i===0?' gold':'')+'">'+(i+1)+'</span>'+teamLogo(s.team_id,22)+'<span class="rk-nm">'+esc(tName(s.team_id))+'</span><span class="rk-p">'+s.points+'</span></a>').join(''));
+  const inL=D.athletes.filter(a=>a.team_id!=null&&teamById[a.team_id]&&teamById[a.team_id].league_id==l.id&&a.matches>=2).sort((a,b)=>(b.rating/(b.matches*10))-(a.rating/(a.matches*10))).slice(0,4);
+  if(inL.length)h+=railCard('Form Players','players →','#/players',inL.map(a=>rankRow('#/player/'+a.id,avatar(a.id,22),a.name,avgRating(a.rating,a.matches))).join(''));
+  return h||railGlobal();}
 // Swap in fresh data and re-render the current route IN PLACE (no page reload → no
 // blink). Scroll is preserved; the nav (incl. the search box) is left intact, only the
 // update counter ticks. Sort state on the current table resets, same as a reload would.
 function applyData(d){if(!d)return;D=d;buildIndex();router();renderRail();setUpd();}
+const HOSTED=/^https?:$/.test(location.protocol);
+// Navigate: render the route WITH the entrance reveal (hosted site only) + refresh the
+// context rail. Data-refresh (applyData) and sprite-load re-renders deliberately skip the reveal.
+function go(){_reveal=HOSTED;router();_reveal=false;renderRail();}
 // Hosted site only: poll league_data.json and apply it when the publish counter moves.
 // The local file:// broadcast page can't fetch a sibling, so it keeps its <meta refresh>
 // (the mod rewrites that whole file each tick); polling is skipped there.
@@ -631,6 +675,6 @@ function startPolling(){if(!/^https?:$/.test(location.protocol))return;
 // A <meta refresh> reload can drop the URL fragment; restore the route before rendering.
 const savedRoute=sessionStorage.getItem('hub_route');
 if(savedRoute&&savedRoute!=='#/'&&(!location.hash||location.hash==='#'||location.hash==='#/')){history.replaceState(null,'',savedRoute);}
-ensureLayout();buildIndex();nav();router();renderRail();spInit();
+ensureLayout();buildIndex();nav();go();spInit();
 const sy=sessionStorage.getItem('hub_sy');if(sy)scrollTo(0,+sy);
 startPolling();
