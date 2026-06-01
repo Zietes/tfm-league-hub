@@ -107,6 +107,10 @@ function spark(vals,invert,W,H){W=W||150;H=H||32;const P=4,n=vals?vals.length:0;
   return '<svg class="spark" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" preserveAspectRatio="none"><polyline points="'+pts+'"/><circle cx="'+X(n-1).toFixed(1)+'" cy="'+Y(vals[n-1]).toFixed(1)+'" r="2.2"/></svg>';}
 const itemName=i=>{const k=D.items[i];return k?champName(k):'#'+i;};
 // item icon: CSS-crop the 18×18 atlas via window.ITEM_ICONS[i]=[x,y,w,h] px. Absent → ''.
+// ability icon: CSS-crop the skill_icon atlas via window.SKILL_ICONS["<champ>_<idx>"]. Absent → ''.
+function skillIcon(name,idx,size){size=size||28;const r=window.SKILL_ICONS&&window.SKILL_ICONS[name+'_'+idx];if(!r||!r[3])return '';
+  const s=size/r[3];
+  return '<span class="sico" style="width:'+(r[2]*s).toFixed(1)+'px;height:'+size+'px;background-image:url(\''+(window.ICON_BASE||'')+window.SKILL_SHEET_URL+'\');background-size:'+(window.SKILL_SW*s).toFixed(1)+'px '+(window.SKILL_SH*s).toFixed(1)+'px;background-position:'+(-r[0]*s).toFixed(1)+'px '+(-r[1]*s).toFixed(1)+'px"></span>';}
 function itemIcon(i,size){size=size||24;const r=window.ITEM_ICONS&&window.ITEM_ICONS[i];if(!r||!r[3])return '';
   const s=size/r[3];
   return '<span class="iico" style="width:'+(r[2]*s).toFixed(1)+'px;height:'+size+'px;background-image:url(\''+(window.ICON_BASE||'')+window.ITEM_SHEET_URL+'\');background-size:'+(window.ITEM_SW*s).toFixed(1)+'px '+(window.ITEM_SH*s).toFixed(1)+'px;background-position:'+(-r[0]*s).toFixed(1)+'px '+(-r[1]*s).toFixed(1)+'px"></span>';}
@@ -251,7 +255,7 @@ function champDef(name){return (window.CHAMP_DATA&&window.CHAMP_DATA.info&&windo
 function champDesc(name){return (window.CHAMP_DATA&&window.CHAMP_DATA.desc&&window.CHAMP_DATA.desc[name])||null;}
 function champCat(c){const m=window.CHAMP_DATA&&window.CHAMP_DATA.cat;return (m&&m[String(c).toLowerCase()])||c;}
 const CHAMP_STAT={attack:'Attack',hp:'HP',defence:'Armor',magic_resistance:'Magic Resist',magic_power:'Ability Power',move_speed:'Move Speed',crit_chance:'Crit Chance',hp_regen:'HP Regen'};
-const ABIL_SLOTS=[['attack','Basic Attack'],['skill','Skill 1'],['skill2','Skill 2'],['ult','Ultimate']];
+const ABIL_SLOTS=[['attack','Basic Attack',0],['skill','Skill 1',1],['skill2','Skill 2',2],['ult','Ultimate',3]];
 const ABIL_EFFECTS=[['stun','Stun'],['airborne','Knock-up'],['knockback','Knockback'],['slow','Slow'],['shield','Shield'],['heal','Heal'],['silence','Silence'],['taunt','Taunt'],['fear','Fear'],['charm','Charm'],['bind','Root'],['banish','Banish'],['seal','Seal'],['invisible','Stealth'],['vamp','Lifesteal'],['lifesteal','Lifesteal'],['bleed','Bleed'],['burn','Burn'],['poison','Poison'],['dot','DoT']];
 function abilEffects(a){const out=[],seen={},ks=Object.keys(a);for(const e of ABIL_EFFECTS){if(seen[e[1]])continue;if(ks.some(k=>k.indexOf(e[0])>=0)){out.push(e[1]);seen[e[1]]=1;if(out.length>=4)break;}}return out;}
 // Fill the reliably-mappable placeholders (Damage/Coef/Range from the ability's own fields), strip the
@@ -288,8 +292,8 @@ function vChampion(name){const c=champByName[name];const def=champDef(name);cons
   const sub=def?(esc(champCat(def.category))+(def.tags&&def.tags.length?'  ·  '+def.tags.map(esc).join(' / '):'')):null;
   let h=heroHeader(champIcon(name,74,true,'bare'),'Champion',esc((dsc&&dsc.name)||champName(name)),sub,stats);
   if(def){h+='<h2>Abilities</h2><div class="kit">';
-    ABIL_SLOTS.forEach(([slot,lbl])=>{const a=def[slot];if(!a)return;const d=dsc?dsc[slot]:'';const eff=abilEffects(a),chips=abilChips(a);
-      h+='<div class="abil'+(slot==='ult'?' ult-card':'')+'"><div class="abil-h"><span class="abil-slot '+slot+'">'+lbl+'</span>'+(eff.length?'<span class="abil-eff">'+eff.map(e=>'<span class="etag">'+esc(e)+'</span>').join('')+'</span>':'')+'</div>'
+    ABIL_SLOTS.forEach(([slot,lbl,idx])=>{const a=def[slot];if(!a)return;const d=dsc?dsc[slot]:'';const eff=abilEffects(a),chips=abilChips(a),ico=skillIcon(name,idx,30);
+      h+='<div class="abil'+(slot==='ult'?' ult-card':'')+'"><div class="abil-h">'+(ico?'<span class="abil-ico">'+ico+'</span>':'')+'<span class="abil-slot '+slot+'">'+lbl+'</span>'+(eff.length?'<span class="abil-eff">'+eff.map(e=>'<span class="etag">'+esc(e)+'</span>').join('')+'</span>':'')+'</div>'
         +(d?'<p class="abil-d">'+esc(resolveAbility(d,a))+'</p>':'')
         +(chips.length?'<div class="abil-chips">'+chips.map(x=>'<span class="achip"><span class="al">'+x[0]+'</span><span class="av">'+x[1]+'</span></span>').join('')+'</div>':'')+'</div>';});
     h+='</div>';
