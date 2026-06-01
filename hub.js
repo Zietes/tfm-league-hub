@@ -183,7 +183,7 @@ function vStandings(){
   D.leagues.forEach(l=>{(compsByLeague[l.id]||[]).forEach(c=>{
   h+='<h2 id="lg-'+l.id+'">'+lLink(l.id)+'</h2><table class="s"><thead><tr><th data-nosort>#</th><th>Team</th><th data-num>Pts</th><th data-num>W</th><th data-num>L</th><th data-num>Win%</th><th data-num>SW</th><th data-num>SL</th><th data-num>K</th><th data-num>Adj</th></tr></thead><tbody>';
   c.standings.forEach((s,i)=>{const adj=s.adj?('<span class="'+(s.adj>0?'pos">+':'neg">')+s.adj+'</span>'):'';
-    h+='<tr'+(i===0?' class="lead"':'')+'><td>'+(i+1)+'</td><td>'+tLink(s.team_id)+'</td><td class="num"><b>'+s.points+'</b></td><td class="num">'+s.win+'</td><td class="num">'+s.lose+'</td><td class="num">'+pct(s.win,s.win+s.lose)+'</td><td class="num">'+s.set_win+'</td><td class="num">'+s.set_lose+'</td><td class="num">'+s.kill+'</td><td class="num">'+adj+'</td></tr>';});
+    h+='<tr'+(i===0?' class="lead"':'')+'><td class="'+(i<3?'r'+(i+1):'')+'">'+(i+1)+'</td><td>'+tLink(s.team_id)+'</td><td class="num"><b>'+s.points+'</b></td><td class="num">'+s.win+'</td><td class="num">'+s.lose+'</td><td class="num">'+pct(s.win,s.win+s.lose)+'</td><td class="num">'+s.set_win+'</td><td class="num">'+s.set_lose+'</td><td class="num">'+s.kill+'</td><td class="num">'+adj+'</td></tr>';});
   h+='</tbody></table>';});});mount(h);}
 function vTeams(){let h='<h1>Teams</h1><table class="s"><thead><tr><th>Team</th><th>Manager</th><th>League</th><th data-num>Fans</th><th data-num>Balance</th></tr></thead><tbody>';
   D.teams.forEach(t=>{const l=leagueById[t.league_id];h+='<tr><td>'+tLink(t.id,40)+'</td><td>'+esc(t.manager)+'</td><td>'+lLink(t.league_id)+'</td><td class="num" data-s="'+t.fan_count+'">'+t.fan_count.toLocaleString()+'</td><td class="num" data-s="'+t.balance+'">'+money(t.balance)+'</td></tr>';});
@@ -197,13 +197,28 @@ function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</
   if(t.rank_hist&&t.rank_hist.length>1){
     h+='<h2>Standings trend <small>last '+t.rank_hist.length+' days'+(rk?' · now #'+rk:'')+'</small></h2>'+spark(t.rank_hist,true,220,40);}
   const f=t.finance;
-  if(f){h+='<h2>Business &amp; finances</h2>';
-    h+='<div class="kv"><div>Transfer budget <b>'+money(f.transfer_budget)+'</b></div><div>Salary budget <b>'+money(f.salary_budget)+'</b></div><div>Scout budget <b>'+money(f.scout_budget)+'</b></div><div>Popularity <b>'+(f.popularity||0)+'</b></div><div>Fan momentum <b class="'+(f.fan_momentum>0?'pos':f.fan_momentum<0?'neg':'')+'">'+(f.fan_momentum>0?'+':'')+(f.fan_momentum||0)+'</b></div></div>';
-    h+='<div class="kv"><div>🏟️ '+esc(f.stadium_name||'Stadium')+' <b>cap '+(f.stadium_capacity||0).toLocaleString()+'</b> · grade <b>'+grade(f.stadium_grade)+'</b></div><div>Home gate <b>'+money(f.entrance_income)+'</b> / '+(f.home_matches||0)+' games</div><div>Attendance <b>'+(f.home_attendance||0).toLocaleString()+'</b></div></div>';
-    h+='<div class="kv"><div>Training facility <b>'+grade(f.training_grade)+'</b></div><div>Merch facility <b>'+grade(f.merch_grade)+'</b></div><div>Gaming house <b>'+grade(f.gaming_house)+'</b></div><div>Fan satisfaction <b class="'+(f.fan_satisfaction>=3?'pos':f.fan_satisfaction<=1?'neg':'')+'">'+esc(fanSat(f.fan_satisfaction))+'</b></div><div>Fan expectation <b>'+esc(fanExp(f.fan_expectation))+'</b></div></div>';}
-  h+='<h2>Roster</h2><table><thead><tr><th>Role</th><th>Player</th><th>Recent champions</th></tr></thead><tbody>';
-  t.roster.forEach((aid,i)=>{const a=aid!=null?athById[aid]:null;h+='<tr><td>'+(POS[i]||('P'+i))+'</td><td>'+(a?aLink(aid):'—')+'</td><td class="chips">'+(a?a.recent_champions.map(c=>'<span>'+cLink(c)+'</span>').join(''):'')+'</td></tr>';});
-  h+='</tbody></table>';
+  if(f){const fc=(l,v,cls,sub)=>'<div class="fcard"><span class="l">'+l+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span>'+(sub?'<span class="s">'+sub+'</span>':'')+'</div>';
+    h+='<h2>Business &amp; finances</h2><div class="fin">'
+      +fc('Transfer Budget',money(f.transfer_budget))
+      +fc('Salary Budget',money(f.salary_budget))
+      +fc('Scout Budget',money(f.scout_budget))
+      +fc('Popularity',f.popularity||0)
+      +fc('Fan Momentum',(f.fan_momentum>0?'+':'')+(f.fan_momentum||0),f.fan_momentum>0?'pos':f.fan_momentum<0?'neg':'')
+      +fc('Fan Satisfaction',esc(fanSat(f.fan_satisfaction)),f.fan_satisfaction>=3?'pos':f.fan_satisfaction<=1?'neg':'')
+      +fc('Fan Expectation',esc(fanExp(f.fan_expectation)))
+      +fc('🏟 '+esc(f.stadium_name||'Stadium'),grade(f.stadium_grade)+' grade','','cap '+(f.stadium_capacity||0).toLocaleString())
+      +fc('Home Gate',money(f.entrance_income),'',(f.home_matches||0)+' games · '+(f.home_attendance||0).toLocaleString()+' att.')
+      +fc('Training',grade(f.training_grade))
+      +fc('Merchandise',grade(f.merch_grade))
+      +fc('Gaming House',grade(f.gaming_house))
+      +'</div>';}
+  h+='<h2>Roster <small>starting lineup</small></h2><div class="roster">';
+  t.roster.forEach((aid,i)=>{const a=aid!=null?athById[aid]:null;
+    h+='<div class="rcard"><div class="rcard-h"><span class="rcard-pos">'+roleIcon(i)+(POS[i]||('P'+i))+'</span>'+(a&&a.matches?'<span class="rcard-rt">'+avgRating(a.rating,a.matches)+'</span>':'')+'</div>'
+      +(a?'<a class="rcard-p" href="#/player/'+aid+'">'+avatar(aid,36)+'<span>'+esc(a.name)+'</span></a>':'<div class="rcard-empty">Vacant</div>')
+      +(a&&a.recent_champions&&a.recent_champions.length?'<div class="rcard-champs">'+a.recent_champions.slice(0,5).map(c=>'<a href="#/champion/'+encodeURIComponent(c)+'" title="'+esc(champName(c))+'">'+champIcon(c,26,true,'')+'</a>').join('')+'</div>':'')
+      +'</div>';});
+  h+='</div>';
   const ms=D.matches.filter(m=>m.blue_team_id==id||m.red_team_id==id);
   if(ms.length){h+='<h2>Recent matches</h2><table><thead><tr><th>Opponent</th><th>Result</th></tr></thead><tbody>';
     ms.forEach(m=>{const opp=m.blue_team_id==id?m.red_team_id:m.blue_team_id;const won=(m.blue_team_id==id)===m.blue_win;h+='<tr><td>'+tLink(opp)+'</td><td class="'+(won?'win':'loss')+'"><a href="#/match/'+m.id+'">'+(won?'Win':'Loss')+'</a></td></tr>';});h+='</tbody></table>';}
@@ -231,7 +246,7 @@ function vPlayer(id){const a=athById[id];if(!a)return mount('<h1>Player not foun
   if(a.pos){const PD=[['Top','top',0],['Jungle','jungle',1],['Mid','mid',2],['Bot','bottom',3],['Sup','support',4]].filter(d=>(a.pos[d[1]]||0)>0);
     if(PD.length){h+='<h2>Positions</h2><table>'+PD.map(d=>{const v=a.pos[d[1]]||0,st=Math.round(v/20);return '<tr><td>'+roleIcon(d[2])+d[0]+'</td><td class="num">'+v+'</td><td>'+'★'.repeat(st)+'<span class="sub">'+'☆'.repeat(5-st)+'</span></td></tr>';}).join('')+'</table>';}}
   if(a.languages&&a.languages.length)h+='<h2>Communication</h2><div class="chips">'+a.languages.map(l=>{const st=Math.round((l.prof||0)/20);return '<span>'+esc(regionName(l.region))+' '+'★'.repeat(st)+'<span class="sub">'+'☆'.repeat(5-st)+'</span></span>';}).join('')+'</div>';
-  if(a.attr){h+='<h2>Attributes</h2><table>'+ATTR_DEFS.map(d=>{const v=a.attr[d[1]]||0;return '<tr><td>'+d[0]+'</td><td class="num">'+v+'</td><td><div class="bar"><i style="width:'+(100*v/ATTR_MAX).toFixed(0)+'%"></i></div></td></tr>';}).join('')+'</table>';}
+  if(a.attr){h+='<h2>Attributes</h2><div class="attrs">'+ATTR_DEFS.map(d=>{const v=a.attr[d[1]]||0;return '<div class="attr-row"><span class="attr-l">'+d[0]+'</span><span class="attr-v">'+v+'</span><div class="bar"><i style="width:'+(100*v/ATTR_MAX).toFixed(0)+'%"></i></div></div>';}).join('')+'</div>';}
   if(a.soloranks&&a.soloranks.length){h+='<h2>Solo rank</h2><table class="s"><thead><tr><th>Region</th><th data-num>Rating</th><th data-num>W</th><th data-num>L</th><th data-num>Win%</th></tr></thead><tbody>'+
     a.soloranks.map(s=>'<tr><td>'+esc(regionName(s.region))+'</td><td class="num"><b>'+s.rating+'</b></td><td class="num">'+s.wins+'</td><td class="num">'+s.losses+'</td><td class="num">'+pct(s.wins,s.wins+s.losses)+'</td></tr>').join('')+'</tbody></table>';}
   if(a.seasons&&a.seasons.length){h+='<h2>Season history</h2><table class="s"><thead><tr><th data-num>Year</th><th>Role</th><th data-num>M</th><th data-num>W</th><th data-num>Win%</th><th>KDA</th><th data-num>Rating</th><th data-num>MVP</th></tr></thead><tbody>';
@@ -345,7 +360,7 @@ function vLeague(id){const l=leagueById[id];if(!l)return mount('<h1>League not f
   let h=heroHeader(badge(initials(lgName(l)),hue(l.name),'crest',74),'League',esc(lgName(l)),
     leader!=null?'Leader: '+tLink(leader):null,stats);
   (compsByLeague[l.id]||[]).forEach(c=>{h+='<h2>Standings</h2><table class="s"><thead><tr><th data-nosort>#</th><th>Team</th><th data-num>Pts</th><th data-num>W</th><th data-num>L</th><th data-num>Win%</th><th data-nosort>Trend</th></tr></thead><tbody>';
-    c.standings.forEach((s,i)=>{const tt=teamById[s.team_id];h+='<tr'+(i===0?' class="lead"':'')+'><td>'+(i+1)+'</td><td>'+tLink(s.team_id)+'</td><td class="num"><b>'+s.points+'</b></td><td class="num">'+s.win+'</td><td class="num">'+s.lose+'</td><td class="num">'+pct(s.win,s.win+s.lose)+'</td><td>'+spark(tt&&tt.rank_hist,true,90,22)+'</td></tr>';});h+='</tbody></table>';});
+    c.standings.forEach((s,i)=>{const tt=teamById[s.team_id];h+='<tr'+(i===0?' class="lead"':'')+'><td class="'+(i<3?'r'+(i+1):'')+'">'+(i+1)+'</td><td>'+tLink(s.team_id)+'</td><td class="num"><b>'+s.points+'</b></td><td class="num">'+s.win+'</td><td class="num">'+s.lose+'</td><td class="num">'+pct(s.win,s.win+s.lose)+'</td><td>'+spark(tt&&tt.rank_hist,true,90,22)+'</td></tr>';});h+='</tbody></table>';});
   (compsByLeague[l.id]||[]).forEach(c=>{
     if(c.bracket&&c.bracket.length)h+='<h2>Playoffs</h2>'+schedTable(c.bracket,c);
     if(c.sched&&c.sched.length){const played=c.sched.filter(m=>m.done).length;h+='<h2>Schedule <small>'+played+'/'+c.sched.length+' played</small></h2>'+schedTable(c.sched,c);}});
