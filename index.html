@@ -93,7 +93,7 @@ a{color:var(--link);text-decoration:none}a:hover{color:var(--ac);text-decoration
 @media(prefers-reduced-motion:reduce){#app.reveal>*,#app.reveal .explore .tiles>.tile{animation:none}}
 /* ===== champion kit (abilities + base stats) ===== */
 .kit{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin:4px 0 10px}
-.abil{background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-top:2px solid var(--acd);border-radius:12px;padding:13px 15px;box-shadow:var(--sh)}
+.abil{display:flex;flex-direction:column;background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-top:2px solid var(--acd);border-radius:12px;padding:13px 15px;box-shadow:var(--sh)}
 .abil.ult-card{border-top-color:var(--gold)}
 .abil-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
 .abil-ico{flex:none;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:7px;overflow:hidden;background:rgba(8,10,15,.55);border:1px solid var(--line2)}
@@ -103,11 +103,30 @@ a{color:var(--link);text-decoration:none}a:hover{color:var(--ac);text-decoration
 .abil-eff{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
 .etag{font:700 8.5px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ac);background:rgba(70,200,255,.1);border:1px solid var(--acd);border-radius:999px;padding:3px 7px}
 .abil-d{color:var(--mut);font-size:12.5px;line-height:1.5;margin:0 0 9px}
-.abil-chips{display:flex;flex-wrap:wrap;gap:6px}
+.abil-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto;padding-top:9px}
 .achip{display:inline-flex;align-items:center;gap:5px;background:rgba(8,10,15,.5);border:1px solid var(--line);border-radius:7px;padding:5px 9px}
 .achip .al{font:700 8.5px/1.4 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
 .achip .av{font:800 12px/1.4 var(--mono);color:var(--fg)}
 .livetag{color:var(--win);font-weight:800;letter-spacing:.04em}
+/* champion "card" hero: portrait + identity + meta + base-stat pills */
+.chero{display:flex;gap:22px;align-items:flex-start;background:linear-gradient(135deg,var(--surface2),var(--bg2) 72%);border:1px solid var(--line);border-left:3px solid var(--ac);border-radius:var(--r);padding:22px 24px;margin:4px 0 22px;box-shadow:var(--sh)}
+.chero-art{flex:none;width:104px;height:104px;display:flex;align-items:flex-end;justify-content:center;border-radius:14px;overflow:hidden;background:radial-gradient(circle at 50% 125%,rgba(70,200,255,.18),rgba(8,10,15,.55));border:1px solid var(--line2)}
+.chero-body{flex:1;min-width:0}
+.chero-body .kick{font:800 10.5px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--ac);margin-bottom:7px}
+.chero-body h1{margin:0 0 5px;font-size:30px;letter-spacing:-.01em}
+.chero-class{font:700 11.5px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--mut);margin-bottom:15px}
+.chero-class .dot{margin:0 7px;color:var(--faint)}
+.chero-meta{display:flex;flex-wrap:wrap;gap:20px;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.chero-meta>div{display:flex;flex-direction:column;gap:3px}
+.chero-meta .l{font:700 9px/1 var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+.chero-meta .v{font:800 17px/1.1 var(--mono);color:#fff}
+.chero-stats{display:flex;flex-wrap:wrap;gap:7px}
+.spill{display:flex;align-items:baseline;gap:5px;background:rgba(8,10,15,.5);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.spill .sp-l{font:700 9px/1 var(--mono);letter-spacing:.05em;color:var(--faint)}
+.spill .sp-v{font:800 14px/1.2 var(--mono);color:#fff}
+.spill .sp-v .pos{color:var(--win);font-size:11px}.spill .sp-v .neg{color:var(--loss);font-size:11px}
+.spill .sp-g{font:600 10px/1.2 var(--mono);color:var(--mut)}
+@media(max-width:680px){.chero{flex-direction:column;gap:16px}.chero-art{width:84px;height:84px}.chero-body h1{font-size:23px}}
 /* ===== home / landing (portal front door) ===== */
 .home-hero{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:var(--r);padding:40px 36px 30px;margin:4px 0 22px;
   background:radial-gradient(880px 320px at 82% -34%,rgba(70,200,255,.17),transparent 60%),radial-gradient(620px 280px at 0% 120%,rgba(255,206,107,.07),transparent 60%),linear-gradient(160deg,var(--surface2),var(--bg2) 72%);box-shadow:var(--sh)}

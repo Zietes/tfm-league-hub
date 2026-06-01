@@ -256,6 +256,7 @@ function champDef(name){return (window.CHAMP_DATA&&window.CHAMP_DATA.info&&windo
 function champDesc(name){return (window.CHAMP_DATA&&window.CHAMP_DATA.desc&&window.CHAMP_DATA.desc[name])||null;}
 function champCat(c){const m=window.CHAMP_DATA&&window.CHAMP_DATA.cat;return (m&&m[String(c).toLowerCase()])||c;}
 const CHAMP_STAT={attack:'Attack',hp:'HP',defence:'Armor',magic_resistance:'Magic Resist',magic_power:'Ability Power',move_speed:'Move Speed',crit_chance:'Crit Chance',hp_regen:'HP Regen'};
+const CHAMP_STAT_ABBR={attack:'ATK',hp:'HP',defence:'ARM',magic_resistance:'MR',magic_power:'AP',move_speed:'MS',crit_chance:'CRIT',hp_regen:'REGEN'};
 const ABIL_SLOTS=[['attack','Basic Attack',0],['skill','Skill 1',1],['skill2','Skill 2',2],['ult','Ultimate',3]];
 const ABIL_EFFECTS=[['stun','Stun'],['airborne','Knock-up'],['knockback','Knockback'],['slow','Slow'],['shield','Shield'],['heal','Heal'],['silence','Silence'],['taunt','Taunt'],['fear','Fear'],['charm','Charm'],['bind','Root'],['banish','Banish'],['seal','Seal'],['invisible','Stealth'],['vamp','Lifesteal'],['lifesteal','Lifesteal'],['bleed','Bleed'],['burn','Burn'],['poison','Poison'],['dot','DoT']];
 function abilEffects(a){const out=[],seen={},ks=Object.keys(a);for(const e of ABIL_EFFECTS){if(seen[e[1]])continue;if(ks.some(k=>k.indexOf(e[0])>=0)){out.push(e[1]);seen[e[1]]=1;if(out.length>=4)break;}}return out;}
@@ -289,22 +290,29 @@ function vChampions(){const g=D.champions[0]?D.champions[0].games:0;
     h+='<tr><td>'+cLink(c.name,40)+'</td><td class="sub">'+(def?esc(champCat(def.category)):'—')+'</td><td class="num">'+c.picks+'</td><td class="num" data-s="'+(c.games?c.picks/c.games:0)+'">'+(c.picks?pct(c.picks,c.games):'—')+'</td><td class="num">'+c.bans+'</td><td class="num" data-s="'+(c.games?c.bans/c.games:0)+'">'+(c.bans?pct(c.bans,c.games):'—')+'</td><td class="num" data-s="'+(c.picks?c.wins/c.picks:0)+'">'+(c.picks?pct(c.wins,c.picks):'—')+'</td></tr>';});
   mount(h+'</tbody></table>');}
 function vChampion(name){const c=champByName[name];const def=champDef(name);const dsc=champDesc(name);
-  const stats=c?[statCell('Games',c.games),statCell('Pick%',pct(c.picks,c.games)),statCell('Ban%',pct(c.bans,c.games)),statCell('Win%',pct(c.wins,c.picks),c.picks&&c.wins/c.picks>=0.5?'pos':(c.picks?'neg':''))]:[];
-  const sub=def?(esc(champCat(def.category))+(def.tags&&def.tags.length?'  ·  '+def.tags.map(esc).join(' / '):'')):null;
-  let h=heroHeader(champIcon(name,74,true,'bare'),'Champion',esc((dsc&&dsc.name)||champName(name)),sub,stats);
+  const live=champStatById[name];const cstat=live?live.stat:(def?def.stat:null),cgrowth=live?live.growth:(def?def.growth:null);
+  // ----- champion card: portrait + identity + meta + base-stat pills (all in the hero) -----
+  const meta=c?[['Games',c.games],['Pick%',pct(c.picks,c.games)],['Ban%',pct(c.bans,c.games)],['Win%',pct(c.wins,c.picks)]]:[];
+  let pills='';
+  if(cstat)pills=['attack','hp','defence','magic_resistance','magic_power','move_speed','crit_chance','hp_regen'].filter(f=>cstat[f]||(cgrowth&&cgrowth[f])).map(f=>{
+    const cur=cstat[f]||0,base=(def&&def.stat&&def.stat[f])||0,d=cur-base;
+    const delta=(live&&d)?'<span class="'+(d>0?'pos':'neg')+'" title="base-game '+base+'"> '+(d>0?'+':'')+d+'</span>':'';
+    const g=(cgrowth&&cgrowth[f])?'<span class="sp-g" title="per level">+'+cgrowth[f]+'</span>':'';
+    return '<div class="spill"><span class="sp-l">'+CHAMP_STAT_ABBR[f]+'</span><span class="sp-v">'+cur+delta+'</span>'+g+'</div>';}).join('');
+  let h='<section class="chero"><div class="chero-art">'+champIcon(name,100,true,'bare')+'</div><div class="chero-body">'
+    +'<div class="kick">Champion'+(live?' <span class="livetag">● live patch</span>':'')+'</div><h1>'+esc((dsc&&dsc.name)||champName(name))+'</h1>'
+    +(def?'<div class="chero-class">'+esc(champCat(def.category))+(def.tags&&def.tags.length?'<span class="dot">·</span>'+def.tags.map(esc).join(' / '):'')+'</div>':'')
+    +(meta.length?'<div class="chero-meta">'+meta.map(m=>'<div><span class="l">'+m[0]+'</span><span class="v">'+m[1]+'</span></div>').join('')+'</div>':'')
+    +(pills?'<div class="chero-stats">'+pills+'</div>':'')
+    +'</div></section>';
   if(def){h+='<h2>Abilities</h2><div class="kit">';
-    ABIL_SLOTS.forEach(([slot,lbl,idx])=>{const a=def[slot];if(!a)return;const d=dsc?dsc[slot]:'';const eff=abilEffects(a),chips=abilChips(a),ico=skillIcon(name,idx,30);
+    ABIL_SLOTS.forEach(([slot,lbl,idx])=>{const a=def[slot];if(!a)return;const gd=dsc&&dsc[slot];
+      const d=gd?esc(resolveAbility(gd,a)):(slot==='attack'?('A standard '+(def.category?champCat(def.category).toLowerCase()+' ':'')+'auto-attack.'):'');
+      const eff=abilEffects(a),chips=abilChips(a),ico=skillIcon(name,idx,30);
       h+='<div class="abil'+(slot==='ult'?' ult-card':'')+'"><div class="abil-h">'+(ico?'<span class="abil-ico">'+ico+'</span>':'')+'<span class="abil-slot '+slot+'">'+lbl+'</span>'+(eff.length?'<span class="abil-eff">'+eff.map(e=>'<span class="etag">'+esc(e)+'</span>').join('')+'</span>':'')+'</div>'
-        +(d?'<p class="abil-d">'+esc(resolveAbility(d,a))+'</p>':'')
+        +(d?'<p class="abil-d">'+(gd?d:esc(d))+'</p>':'')
         +(chips.length?'<div class="abil-chips">'+chips.map(x=>'<span class="achip"><span class="al">'+x[0]+'</span><span class="av">'+x[1]+'</span></span>').join('')+'</div>':'')+'</div>';});
-    h+='</div>';
-    const live=champStatById[name];const cstat=live?live.stat:def.stat,cgrowth=live?live.growth:def.growth;
-    h+='<h2>Base Stats <small>level 1 · +growth per level'+(live?' · <span class="livetag">● live patch values</span>':'')+'</small></h2>'
-      +'<table class="s"><thead><tr><th>Stat</th><th data-num>'+(live?'Current':'Base')+'</th><th data-num>Growth</th></tr></thead><tbody>'
-      +Object.keys(CHAMP_STAT).filter(f=>cstat[f]||cgrowth[f]||(def.stat&&def.stat[f])).map(f=>{
-        const cur=cstat[f]||0,base=(def.stat&&def.stat[f])||0,d=cur-base;
-        const delta=(live&&d)?' <span class="'+(d>0?'pos':'neg')+'" title="base-game '+base+'">'+(d>0?'+':'')+d+'</span>':'';
-        return '<tr><td>'+CHAMP_STAT[f]+'</td><td class="num"><b>'+cur+'</b>'+delta+'</td><td class="num sub">'+(cgrowth[f]?'+'+cgrowth[f]:'—')+'</td></tr>';}).join('')+'</tbody></table>';}
+    h+='</div>';}
   if(c){let rr='';for(let i=0;i<5;i++){if(c.role_picks[i]>0)rr+='<tr><td>'+POS[i]+'</td><td class="num">'+c.role_picks[i]+'</td><td class="num">'+pct(c.role_wins[i],c.role_picks[i])+'</td></tr>';}
     if(rr)h+='<h2>By role</h2><table class="s"><thead><tr><th>Role</th><th data-num>Picks</th><th data-num>Win%</th></tr></thead><tbody>'+rr+'</tbody></table>';}
   const players={};D.matches.forEach(m=>m.picks.forEach(p=>{if(p.champion==name)players[p.athlete_id]=(players[p.athlete_id]||0)+1;}));
