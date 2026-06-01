@@ -219,6 +219,15 @@ function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</
       +(a&&a.recent_champions&&a.recent_champions.length?'<div class="rcard-champs">'+a.recent_champions.slice(0,5).map(c=>'<a href="#/champion/'+encodeURIComponent(c)+'" title="'+esc(champName(c))+'">'+champIcon(c,26,true,'')+'</a>').join('')+'</div>':'')
       +'</div>';});
   h+='</div>';
+  // Subs / squad depth: athletes contracted to this team who aren't in the starting five.
+  const starters=new Set(t.roster.filter(x=>x!=null));
+  const subs=D.athletes.filter(a=>a.team_id==id&&!starters.has(a.id)).sort((a,b)=>(b.matches-a.matches)||(b.rating/((b.matches||1)*10)-a.rating/((a.matches||1)*10)));
+  if(subs.length){h+='<h2>Substitutes <small>'+subs.length+' on the bench</small></h2><div class="roster">';
+    subs.forEach(a=>{h+='<div class="rcard"><div class="rcard-h"><span class="rcard-pos">SUB</span>'+(a.matches?'<span class="rcard-rt">'+avgRating(a.rating,a.matches)+'</span>':'')+'</div>'
+      +'<a class="rcard-p" href="#/player/'+a.id+'">'+avatar(a.id,36)+'<span>'+esc(a.name)+'</span></a>'
+      +(a.recent_champions&&a.recent_champions.length?'<div class="rcard-champs">'+a.recent_champions.slice(0,5).map(c=>'<a href="#/champion/'+encodeURIComponent(c)+'" title="'+esc(champName(c))+'">'+champIcon(c,26,true,'')+'</a>').join('')+'</div>':'')
+      +'</div>';});
+    h+='</div>';}
   const ms=D.matches.filter(m=>m.blue_team_id==id||m.red_team_id==id);
   if(ms.length){h+='<h2>Recent matches</h2><table><thead><tr><th>Opponent</th><th>Result</th></tr></thead><tbody>';
     ms.forEach(m=>{const opp=m.blue_team_id==id?m.red_team_id:m.blue_team_id;const won=(m.blue_team_id==id)===m.blue_win;h+='<tr><td>'+tLink(opp)+'</td><td class="'+(won?'win':'loss')+'"><a href="#/match/'+m.id+'">'+(won?'Win':'Loss')+'</a></td></tr>';});h+='</tbody></table>';}
