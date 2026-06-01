@@ -24,6 +24,12 @@ const FAN_SAT=['Very Dissatisfied','Dissatisfied','Normal','Satisfied','Very Sat
 const FAN_EXP=['Bottom Tier','Lower Tier','Mid Tier','Upper Tier','Top Tier'];
 const fanSat=i=>FAN_SAT[i]||('Lv '+i);
 const fanExp=i=>FAN_EXP[i]||('Lv '+i);
+// League.name is a short CODE ("TACK"); the in-game display name is region + division. The 12
+// base leagues are fixed (6 regions × 2 divisions) — map the code → full name (text/ui league.tack
+// resolves to the short "KR Div 1"; this is the long form the game shows). Custom leagues fall back.
+const LEAGUE_NAMES={tack:'Korea Division 1',tacc:'China Division 1',tace:'Europe Division 1',taca:'North America Division 1',tacs:'South America Division 1',tacj:'Japan Division 1',tack2:'Korea Division 2',tacc2:'China Division 2',tace2:'Europe Division 2',taca2:'North America Division 2',tacs2:'South America Division 2',tacj2:'Japan Division 2'};
+const lgLabel=s=>LEAGUE_NAMES[String(s||'').toLowerCase()]||s; // a league CODE string -> full name (passes non-leagues through)
+function lgName(l){if(l==null)return '';if(typeof l!=='object')l=leagueById[l];return l?lgLabel(l.name):'';}
 // --- generated iconography (deterministic, offline; also the real-art fallback) ---
 function hue(s){let h=0;s=String(s);for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h%360;}
 function initials(s){s=String(s||'').trim();const w=s.split(/[\s_]+/).filter(Boolean);
@@ -92,7 +98,7 @@ function champIcon(n,size,ground,extra){size=size||20;const F=window.CHAMP_FRAME
   const s=size/Math.max(f.w,f.h),dw=f.w*s,dh=f.h*s,ox=(size-dw)/2,oy=ground?(size-dh):(size-dh)/2;
   return '<span class="cico'+(extra?' '+extra:'')+'" style="width:'+size+'px;height:'+size+'px"><i style="width:'+dw.toFixed(1)+'px;height:'+dh.toFixed(1)+'px;left:'+ox.toFixed(1)+'px;top:'+oy.toFixed(1)+'px;background-image:url(\''+(window.ICON_BASE||'')+'icons/champion/'+encodeURIComponent(n)+'.png\');background-size:'+(f.sw*s).toFixed(1)+'px '+(f.sh*s).toFixed(1)+'px;background-position:'+(-f.x*s).toFixed(1)+'px '+(-f.y*s).toFixed(1)+'px"></i></span>';}
 const cLink=(n,sz)=>'<a href="#/champion/'+encodeURIComponent(n)+'">'+champIcon(n,sz)+esc(champName(n))+'</a>';
-const lLink=id=>leagueById[id]?'<a href="#/league/'+id+'">'+esc(leagueById[id].name)+'</a>':('League '+id);
+const lLink=id=>leagueById[id]?'<a href="#/league/'+id+'">'+esc(lgName(leagueById[id]))+'</a>':('League '+id);
 // Inline-SVG sparkline. invert=true puts smaller values up top (for rank, where #1 is best).
 function spark(vals,invert,W,H){W=W||150;H=H||32;const P=4,n=vals?vals.length:0;if(n<2)return '<span class="sub">—</span>';
   const min=Math.min(...vals),max=Math.max(...vals),rng=(max-min)||1;
@@ -129,7 +135,7 @@ function scrollToEl(id){const e=document.getElementById(id);if(e)e.scrollIntoVie
 function vStandings(){
   let h=heroHeader('','League Hub','Standings','Custom-points standings · auto-updating live',
     [statCell('Leagues',D.leagues.length),statCell('Teams',D.teams.length),statCell('Update','#'+(D.updated||0))]);
-  const pills=[];D.leagues.forEach(l=>{if((compsByLeague[l.id]||[]).length)pills.push('<a onclick="scrollToEl(\'lg-'+l.id+'\')">'+esc(l.name)+'</a>');});
+  const pills=[];D.leagues.forEach(l=>{if((compsByLeague[l.id]||[]).length)pills.push('<a onclick="scrollToEl(\'lg-'+l.id+'\')">'+esc(lgName(l))+'</a>');});
   if(pills.length>1)h+='<div class="switch">'+pills.join('')+'</div>';
   D.leagues.forEach(l=>{(compsByLeague[l.id]||[]).forEach(c=>{
   h+='<h2 id="lg-'+l.id+'">'+lLink(l.id)+'</h2><table class="s"><thead><tr><th data-nosort>#</th><th>Team</th><th data-num>Pts</th><th data-num>W</th><th data-num>L</th><th data-num>Win%</th><th data-num>SW</th><th data-num>SL</th><th data-num>K</th><th data-num>Adj</th></tr></thead><tbody>';
@@ -243,7 +249,7 @@ function vLeague(id){const l=leagueById[id];if(!l)return mount('<h1>League not f
   const tmAll=D.teams.filter(t=>t.league_id==id);const comp0=(compsByLeague[id]||[])[0];
   const leader=comp0&&comp0.standings[0]?comp0.standings[0].team_id:null;
   const stats=[statCell('Division',l.division??'?'),statCell('Teams',tmAll.length),statCell('Prize pool',money((l.prize_pool||[]).reduce((a,b)=>a+b,0)))];
-  let h=heroHeader(badge(initials(l.name),hue(l.name),'crest',74),'League',esc(l.name),
+  let h=heroHeader(badge(initials(lgName(l)),hue(l.name),'crest',74),'League',esc(lgName(l)),
     leader!=null?'Leader: '+tLink(leader):null,stats);
   (compsByLeague[l.id]||[]).forEach(c=>{h+='<h2>Standings</h2><table class="s"><thead><tr><th data-nosort>#</th><th>Team</th><th data-num>Pts</th><th data-num>W</th><th data-num>L</th><th data-num>Win%</th><th data-nosort>Trend</th></tr></thead><tbody>';
     c.standings.forEach((s,i)=>{const tt=teamById[s.team_id];h+='<tr'+(i===0?' class="lead"':'')+'><td>'+(i+1)+'</td><td>'+tLink(s.team_id)+'</td><td class="num"><b>'+s.points+'</b></td><td class="num">'+s.win+'</td><td class="num">'+s.lose+'</td><td class="num">'+pct(s.win,s.win+s.lose)+'</td><td>'+spark(tt&&tt.rank_hist,true,90,22)+'</td></tr>';});h+='</tbody></table>';});
@@ -316,7 +322,7 @@ function deskResults(limit){
 }
 function deskStandings(limit){const out=[];
   D.leagues.forEach(l=>{const c=(compsByLeague[l.id]||[])[0];if(c&&c.standings[0]){const s=c.standings[0],st=streak(teamForm(s.team_id,6));
-    out.push({head:tName(s.team_id)+' top '+l.name,blurb:tName(s.team_id)+' sit atop '+l.name+' at '+s.win+'–'+s.lose+(st?', riding a '+st:'')+'.',tag:'Standings',link:'#/league/'+l.id,score:40+s.points/5,desk:'Standings'});}});
+    out.push({head:tName(s.team_id)+' top '+lgName(l),blurb:tName(s.team_id)+' sit atop '+lgName(l)+' at '+s.win+'–'+s.lose+(st?', riding a '+st:'')+'.',tag:'Standings',link:'#/league/'+l.id,score:40+s.points/5,desk:'Standings'});}});
   D.teams.forEach(t=>{if(t.rank_hist&&t.rank_hist.length>=2){const cur=t.rank_hist[t.rank_hist.length-1],d=t.rank_hist[t.rank_hist.length-2]-cur;if(Math.abs(d)>=2)
     out.push({head:tName(t.id)+(d>0?' on the rise':' stumbling'),blurb:tName(t.id)+' '+(d>0?'climbed':'dropped')+' '+Math.abs(d)+' place'+(Math.abs(d)>1?'s':'')+' to #'+cur+' in the table.',tag:'Mover',cls:d>0?'up':'',link:'#/team/'+t.id,score:55+Math.abs(d)*4,desk:'Standings'});}});
   return out.sort((a,b)=>b.score-a.score).slice(0,limit);}
@@ -363,7 +369,7 @@ function newsScope(it){const s=String(it.title).split('.');return (s[0]==='artic
 function teamBind(it,k){const v=bindVal(it,k);return v?teamByName[String(v).toLowerCase()]:null;}
 function athBind(it){const id=bindVal(it,'AthleteId');if(id!=null&&athById[+id])return athById[+id];const nm=bindVal(it,'Athlete');return nm?athByName[String(nm).toLowerCase()]:null;}
 function rankPhrase(r){if(!r)return '';return (['','1st','2nd','3rd'][r.rank]||(r.rank+'th'))+' of '+r.n;}
-function leagueName(t){const l=t&&leagueById[t.league_id];return l?l.name:null;}
+function leagueName(t){const l=t&&leagueById[t.league_id];return l?lgName(l):null;}
 function teamStar(tid){return D.athletes.filter(a=>a.team_id==tid&&a.matches>0).sort((x,y)=>(y.rating/(y.matches*10))-(x.rating/(x.matches*10)))[0]||null;}
 function recStr(r){return r?(r.s.win+'–'+r.s.lose):'';}
 function formDots(tid,n){return teamForm(tid,n||5).map(w=>'<span class="'+(w?'win':'loss')+'">'+(w?'W':'L')+'</span>').join('');}
@@ -439,7 +445,7 @@ function synthTransfer(it,i){const buy=teamBind(it,'BuyTeam'),sell=teamBind(it,'
   return null;}
 function synthSeason(it,i){const T=teamBind(it,'Team')||teamByName[String(bindVal(it,'TeamName')||'').toLowerCase()];if(!T)return null;
   const r=teamRank(T.id),l=leagueById[T.league_id];
-  let p='<p>'+tLinkT(T.id)+' '+pick(['open a fresh chapter','set their sights ahead','look to climb'],i)+(l?' in '+esc(l.name):'')+'.';
+  let p='<p>'+tLinkT(T.id)+' '+pick(['open a fresh chapter','set their sights ahead','look to climb'],i)+(l?' in '+esc(lgName(l)):'')+'.';
   if(r)p+=' They sit '+rankPhrase(r)+' on a '+recStr(r)+' record.';
   const prize=l&&l.prize_pool?l.prize_pool.reduce((x,y)=>x+y,0):0,pm=money(prize);if(prize>0&&pm!=='$0')p+=' The league carries a '+pm+' prize pool.';
   p+='</p>';
@@ -513,7 +519,7 @@ function vNews(){
   const desk=(title,route,list)=>{const ls=list.filter(s=>s!==lead).slice(0,3);if(!ls.length)return '';return '<section class="ndesk"><div class="ndesk-h"><h2>'+title+'</h2><a class="more" href="'+route+'">more →</a></div>'+ls.map(card).join('')+'</section>';};
   h+='<div class="nroom">'+desk('Results','#/matches',R)+desk('Standings','#/standings',S)+desk('Transfers','#/transfers',T)+desk('Meta Watch','#/champions',M)+desk('Player Spotlight','#/players',P)+'</div>';
   const office=deskOffice(8);
-  if(office.length){const ocard=s=>'<a class="ncard" href="#/article/'+s.idx+'"><span class="ntag">'+esc(s.tag)+'</span><div class="nhead">'+esc(s.head)+'</div>'+(s.body?'<div class="nblurb">'+esc(clip(s.body,200))+'</div>':'')+'<span class="byline">— '+esc(s.by)+(s.date?' · '+esc(s.date):'')+'</span></a>';
+  if(office.length){const ocard=s=>'<a class="ncard" href="#/article/'+s.idx+'"><span class="ntag">'+esc(s.tag)+'</span><div class="nhead">'+esc(s.head)+'</div>'+(s.body?'<div class="nblurb">'+esc(clip(s.body,200))+'</div>':'')+'<span class="byline">— '+esc(lgLabel(s.by))+(s.date?' · '+esc(s.date):'')+'</span></a>';
     h+='<section class="ndesk office"><div class="ndesk-h"><h2>From the League Office <small>straight off the game wire</small></h2></div><div class="owrap">'+office.map(ocard).join('')+'</div></section>';}
   mount(h);
 }
@@ -521,7 +527,7 @@ function vArticle(i){const it=D.news&&D.news[+i];if(!it)return mount('<h1>Articl
   const head=headline(it,+i)||'(untitled)',body=articleBody(it,+i);
   let h='<p class="sub"><a href="#/news">← Newsroom</a></p>';
   h+='<span class="ntag">'+esc(OFFICE_TAGS[newsScope(it)]||'League')+'</span><h1>'+esc(head)+'</h1>';
-  h+='<p class="byline">— '+esc(it.by)+(it.date?' · '+esc(it.date):'')+'</p>';
+  h+='<p class="byline">— '+esc(lgLabel(it.by))+(it.date?' · '+esc(it.date):'')+'</p>';
   h+=body?('<div class="article-body">'+body+'</div>'):'<p class="sub">No further detail on the wire.</p>';
   if(it.team!=null&&teamById[it.team])h+='<p>Related: '+tLink(it.team)+'</p>';
   mount(h);
