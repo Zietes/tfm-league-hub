@@ -109,6 +109,8 @@ function spark(vals,invert,W,H){W=W||150;H=H||32;const P=4,n=vals?vals.length:0;
   const pts=vals.map((v,i)=>X(i).toFixed(1)+','+Y(v).toFixed(1)).join(' ');
   return '<svg class="spark" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" preserveAspectRatio="none"><polyline points="'+pts+'"/><circle cx="'+X(n-1).toFixed(1)+'" cy="'+Y(vals[n-1]).toFixed(1)+'" r="2.2"/></svg>';}
 const itemName=i=>{const k=D.items[i];return k?champName(k):'#'+i;};
+// Item as a real icon (hosted site) or a text-name fallback (in-game broadcast page, no ITEM_ICONS).
+function itemChip(i,size){const ic=itemIcon(i,size||26);return ic?'<span class="ichip" title="'+esc(itemName(i))+'">'+ic+'</span>':'<span class="itxt">'+esc(itemName(i))+'</span>';}
 // item icon: CSS-crop the 18×18 atlas via window.ITEM_ICONS[i]=[x,y,w,h] px. Absent → ''.
 // ability icon: CSS-crop the skill_icon atlas via window.SKILL_ICONS["<champ>_<idx>"]. Absent → ''.
 function skillIcon(name,idx,size){size=size||28;const r=window.SKILL_ICONS&&window.SKILL_ICONS[name+'_'+idx];if(!r||!r[3])return '';
@@ -376,8 +378,26 @@ function vChampion(name){const c=champByName[name];const def=champDef(name);cons
         +(d?'<p class="abil-d">'+(gd?d:esc(d))+'</p>':'')
         +(chips.length?'<div class="abil-chips">'+chips.map(x=>'<span class="achip"><span class="al">'+x[0]+'</span><span class="aval">'+x[1]+'</span></span>').join('')+'</div>':'')+'</div>';});
     h+='</div>';}
-  if(c){let rr='';for(let i=0;i<5;i++){if(c.role_picks[i]>0)rr+='<tr><td>'+POS[i]+'</td><td class="num">'+c.role_picks[i]+'</td><td class="num">'+pct(c.role_wins[i],c.role_picks[i])+'</td></tr>';}
-    if(rr)h+='<h2>By role</h2><table class="s"><thead><tr><th>Role</th><th data-num>Picks</th><th data-num>Win%</th></tr></thead><tbody>'+rr+'</tbody></table>';}
+  if(c){
+    // this champion's picks across all matches (with win flag) — drives both role combat + item builds
+    const cp=[];D.matches.forEach(m=>{const bw=m.blue_win;m.picks.forEach(p=>{if(p.champion==name)cp.push({p,won:p.blue===bw});});});
+    const rmean=(arr,f)=>arr.length?arr.reduce((s,x)=>s+(x.p[f]||0),0)/arr.length:0;
+    // By role — combat (K/D, damage, CS) varies by role even when builds don't.
+    let rr='';for(let i=0;i<5;i++){if(c.role_picks[i]>0){const rp=cp.filter(x=>x.p.position===i),dmg=Math.round(rmean(rp,'deal'));
+      rr+='<tr><td>'+roleTag(i)+'</td><td class="num">'+c.role_picks[i]+'</td><td class="num">'+pct(c.role_wins[i],c.role_picks[i])+'</td><td class="num">'+rmean(rp,'kills').toFixed(1)+' / '+rmean(rp,'deaths').toFixed(1)+'</td><td class="num" data-s="'+dmg+'">'+dmg.toLocaleString()+'</td><td class="num">'+rmean(rp,'cs').toFixed(0)+'</td></tr>';}}
+    if(rr)h+='<h2>By role</h2><table class="s"><thead><tr><th>Role</th><th data-num>Picks</th><th data-num>Win%</th><th data-num>Avg K/D</th><th data-num>Avg DMG</th><th data-num>Avg CS</th></tr></thead><tbody>'+rr+'</tbody></table>';
+    // Item builds — the most common item combinations (3-item sets) and signature items, with win rate.
+    const withI=cp.filter(x=>x.p.items&&x.p.items.length);
+    if(withI.length>=4){
+      const itf={};withI.forEach(x=>new Set(x.p.items).forEach(i=>itf[i]=(itf[i]||0)+1)); // core items by per-game PRESENCE (items can stack within a build → dedupe per game so % ≤ 100; stacking still shows in the builds below)
+      const core=Object.entries(itf).map(([i,n])=>[+i,n]).sort((a,b)=>b[1]-a[1]).slice(0,6);
+      const cb={};withI.forEach(x=>{const arr=x.p.items.slice().sort((a,b)=>a-b),k=arr.join(',');if(!cb[k])cb[k]={items:arr,n:0,w:0};cb[k].n++;if(x.won)cb[k].w++;});
+      const builds=Object.values(cb).sort((a,b)=>b.n-a.n).filter(b=>b.n>=2).slice(0,3); // full builds, ≥2 games
+      h+='<h2>Item builds <small>signature items &amp; combinations across '+withI.length+' games · consistent across roles</small></h2>';
+      h+='<div class="coreitems">'+core.map(([i,n])=>'<span class="ci" title="'+esc(itemName(i))+' · in '+pct(n,withI.length)+' of games">'+itemChip(i,32)+'<b>'+pct(n,withI.length)+'</b></span>').join('')+'</div>';
+      if(builds.length)h+='<div class="builds">'+builds.map((b,idx)=>'<div class="bld'+(idx===0?' top':'')+'"><div class="bld-i">'+b.items.map(i=>itemChip(i,34)).join('')+'</div><div class="bld-m"><span class="bld-share">'+pct(b.n,withI.length)+'</span><span class="bld-sub">'+b.n+' games · '+pct(b.w,b.n)+' win</span></div></div>').join('')+'</div>';
+    }
+  }
   const players={};D.matches.forEach(m=>m.picks.forEach(p=>{if(p.champion==name)players[p.athlete_id]=(players[p.athlete_id]||0)+1;}));
   const pr=Object.entries(players).sort((a,b)=>b[1]-a[1]);
   if(pr.length){h+='<h2>Played by</h2><table><thead><tr><th>Player</th><th data-num>Games</th></tr></thead><tbody>'+pr.map(e=>'<tr><td>'+aLink(e[0])+'</td><td class="num">'+e[1]+'</td></tr>').join('')+'</tbody></table>';}
