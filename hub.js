@@ -90,6 +90,10 @@ function spark(vals,invert,W,H){W=W||150;H=H||32;const P=4,n=vals?vals.length:0;
   const pts=vals.map((v,i)=>X(i).toFixed(1)+','+Y(v).toFixed(1)).join(' ');
   return '<svg class="spark" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" preserveAspectRatio="none"><polyline points="'+pts+'"/><circle cx="'+X(n-1).toFixed(1)+'" cy="'+Y(vals[n-1]).toFixed(1)+'" r="2.2"/></svg>';}
 const itemName=i=>{const k=D.items[i];return k?champName(k):'#'+i;};
+// item icon: CSS-crop the 18×18 atlas via window.ITEM_ICONS[i]=[x,y,w,h] px. Absent → ''.
+function itemIcon(i,size){size=size||24;const r=window.ITEM_ICONS&&window.ITEM_ICONS[i];if(!r||!r[3])return '';
+  const s=size/r[3];
+  return '<span class="iico" style="width:'+(r[2]*s).toFixed(1)+'px;height:'+size+'px;background-image:url(\''+(window.ICON_BASE||'')+window.ITEM_SHEET_URL+'\');background-size:'+(window.ITEM_SW*s).toFixed(1)+'px '+(window.ITEM_SH*s).toFixed(1)+'px;background-position:'+(-r[0]*s).toFixed(1)+'px '+(-r[1]*s).toFixed(1)+'px"></span>';}
 // Facility/stadium grade enum index -> letter (confirmed in-game: A=3, S=4).
 const grade=i=>['D','C','B','A','S'][i]||('Lv '+i);
 const money=v=>{v=+v||0;const s=v<0?'-':'';v=Math.abs(v);if(v>=1e9)return s+'$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return s+'$'+(v/1e6).toFixed(1)+'M';if(v>=1e3)return s+'$'+(v/1e3).toFixed(0)+'K';return s+'$'+v.toFixed(0);};
@@ -252,7 +256,7 @@ function vMatches(){let h='<h1>Recent Matches</h1><table class="s"><thead><tr><t
   mount(h+'</tbody></table>');}
 function vMatch(id){const m=D.matches.find(x=>x.id==id);if(!m)return mount('<h1>Match not found</h1>');
   const bw=m.blue_win,bp=m.blue_perf||{},rp=m.red_perf||{};
-  let h='<h1>'+tLink(m.blue_team_id)+' <span class="sub">vs</span> '+tLink(m.red_team_id)+'</h1>';
+  let h='<h1>'+tLink(m.blue_team_id,40)+' <span class="sub">vs</span> '+tLink(m.red_team_id,40)+'</h1>';
   h+='<p class="sub">Winner: <b class="win">'+esc(tName(bw?m.blue_team_id:m.red_team_id))+'</b></p>';
   // Team performance comparison (blue | metric | red); bigger value highlighted.
   const prow=(label,f,fmt)=>{fmt=fmt||(v=>v==null?'—':(+v).toLocaleString());const a=bp[f],b=rp[f];
@@ -261,8 +265,8 @@ function vMatch(id){const m=D.matches.find(x=>x.id==id);if(!m)return mount('<h1>
     prow('Kills','kills')+prow('Deaths','deaths')+prow('Damage','deal')+prow('Total gold','total_gold',money)+prow('Gold @ laning','gold_lane',money)+prow('CS @ laning','cs_lane')+'</tbody></table>';
   h+='<div class="kv"><div>'+esc(tName(m.blue_team_id))+' bans <b>'+((m.blue_bans||[]).map(b=>esc(champName(b))).join(', ')||'—')+'</b></div><div>'+esc(tName(m.red_team_id))+' bans <b>'+((m.red_bans||[]).map(b=>esc(champName(b))).join(', ')||'—')+'</b></div></div>';
   const side=b=>{const ps=m.picks.filter(p=>p.blue==b).sort((x,y)=>x.position-y.position);
-    return '<h2>'+tLink(b?m.blue_team_id:m.red_team_id)+(b===bw?' <span class="win">(won)</span>':'')+'</h2><table><thead><tr><th>Role</th><th>Player</th><th>Champion</th><th class="num">K</th><th class="num">D</th><th class="num">Dmg</th><th class="num">CS</th><th>Items</th></tr></thead><tbody>'+
-      ps.map(p=>'<tr><td>'+roleTag(p.position)+'</td><td>'+aLink(p.athlete_id)+'</td><td>'+cLink(p.champion)+'</td><td class="num">'+(p.kills||0)+'</td><td class="num">'+(p.deaths||0)+'</td><td class="num">'+(p.deal||0).toLocaleString()+'</td><td class="num">'+(p.cs||0)+'</td><td class="chips">'+((p.items||[]).map(i=>'<span>'+esc(itemName(i))+'</span>').join('')||'<span class="sub">—</span>')+'</td></tr>').join('')+'</tbody></table>';};
+    return '<h2>'+tLink(b?m.blue_team_id:m.red_team_id,28)+(b===bw?' <span class="win">(won)</span>':'')+'</h2><table><thead><tr><th>Role</th><th>Player</th><th>Champion</th><th class="num">K</th><th class="num">D</th><th class="num">Dmg</th><th class="num">CS</th><th>Items</th></tr></thead><tbody>'+
+      ps.map(p=>'<tr><td>'+roleTag(p.position)+'</td><td>'+aLink(p.athlete_id,40)+'</td><td>'+cLink(p.champion,40)+'</td><td class="num">'+(p.kills||0)+'</td><td class="num">'+(p.deaths||0)+'</td><td class="num">'+(p.deal||0).toLocaleString()+'</td><td class="num">'+(p.cs||0)+'</td><td class="chips">'+((p.items||[]).map(i=>{const ic=itemIcon(i,26);return ic?'<span class="ichip" title="'+esc(itemName(i))+'">'+ic+'</span>':'<span>'+esc(itemName(i))+'</span>';}).join('')||'<span class="sub">—</span>')+'</td></tr>').join('')+'</tbody></table>';};
   mount(h+side(true)+side(false));}
 function vSearch(q){q=String(q||'').toLowerCase();
   const tm=D.teams.filter(t=>t.name.toLowerCase().includes(q)).slice(0,40);
