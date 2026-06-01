@@ -2,10 +2,11 @@
 let D=window.LEAGUE_DATA||{leagues:[],competitions:[],teams:[],athletes:[],matches:[],champions:[],items:[]};
 // Indices are rebuilt by buildIndex() so the hosted site can swap in fresh data
 // (applyData) without a full-page reload. ATTR_MAX is derived from the data too.
-let teamById={},athById={},leagueById={},champByName={},compsByLeague={},ATTR_MAX=1,teamByName={},athByName={};
+let teamById={},athById={},leagueById={},champByName={},compsByLeague={},ATTR_MAX=1,teamByName={},athByName={},champStatById={};
 function buildIndex(){
   D.items=D.items||[];
-  teamById={};athById={};leagueById={};champByName={};compsByLeague={};teamByName={};athByName={};
+  teamById={};athById={};leagueById={};champByName={};compsByLeague={};teamByName={};athByName={};champStatById={};
+  (D.champ_stats||[]).forEach(c=>champStatById[c.id]=c); // live (post-patch) base stats from the running game
   D.teams.forEach(t=>{teamById[t.id]=t;teamByName[String(t.name).toLowerCase()]=t;});
   D.athletes.forEach(a=>{athById[a.id]=a;athByName[String(a.name).toLowerCase()]=a;});
   D.leagues.forEach(l=>leagueById[l.id]=l);D.champions.forEach(c=>champByName[c.name]=c);
@@ -297,8 +298,13 @@ function vChampion(name){const c=champByName[name];const def=champDef(name);cons
         +(d?'<p class="abil-d">'+esc(resolveAbility(d,a))+'</p>':'')
         +(chips.length?'<div class="abil-chips">'+chips.map(x=>'<span class="achip"><span class="al">'+x[0]+'</span><span class="av">'+x[1]+'</span></span>').join('')+'</div>':'')+'</div>';});
     h+='</div>';
-    h+='<h2>Base Stats <small>level 1 · +growth per level</small></h2><table class="s"><thead><tr><th>Stat</th><th data-num>Base</th><th data-num>Growth</th></tr></thead><tbody>'
-      +Object.keys(CHAMP_STAT).filter(f=>def.stat[f]||def.growth[f]).map(f=>'<tr><td>'+CHAMP_STAT[f]+'</td><td class="num"><b>'+(def.stat[f]||0)+'</b></td><td class="num sub">'+(def.growth[f]?'+'+def.growth[f]:'—')+'</td></tr>').join('')+'</tbody></table>';}
+    const live=champStatById[name];const cstat=live?live.stat:def.stat,cgrowth=live?live.growth:def.growth;
+    h+='<h2>Base Stats <small>level 1 · +growth per level'+(live?' · <span class="livetag">● live patch values</span>':'')+'</small></h2>'
+      +'<table class="s"><thead><tr><th>Stat</th><th data-num>'+(live?'Current':'Base')+'</th><th data-num>Growth</th></tr></thead><tbody>'
+      +Object.keys(CHAMP_STAT).filter(f=>cstat[f]||cgrowth[f]||(def.stat&&def.stat[f])).map(f=>{
+        const cur=cstat[f]||0,base=(def.stat&&def.stat[f])||0,d=cur-base;
+        const delta=(live&&d)?' <span class="'+(d>0?'pos':'neg')+'" title="base-game '+base+'">'+(d>0?'+':'')+d+'</span>':'';
+        return '<tr><td>'+CHAMP_STAT[f]+'</td><td class="num"><b>'+cur+'</b>'+delta+'</td><td class="num sub">'+(cgrowth[f]?'+'+cgrowth[f]:'—')+'</td></tr>';}).join('')+'</tbody></table>';}
   if(c){let rr='';for(let i=0;i<5;i++){if(c.role_picks[i]>0)rr+='<tr><td>'+POS[i]+'</td><td class="num">'+c.role_picks[i]+'</td><td class="num">'+pct(c.role_wins[i],c.role_picks[i])+'</td></tr>';}
     if(rr)h+='<h2>By role</h2><table class="s"><thead><tr><th>Role</th><th data-num>Picks</th><th data-num>Win%</th></tr></thead><tbody>'+rr+'</tbody></table>';}
   const players={};D.matches.forEach(m=>m.picks.forEach(p=>{if(p.champion==name)players[p.athlete_id]=(players[p.athlete_id]||0)+1;}));
