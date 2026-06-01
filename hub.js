@@ -280,21 +280,30 @@ function teamRank(tid){for(const c of D.competitions){const i=c.standings.findIn
 function teamForm(tid,n){const r=[];for(const m of D.matches){if(m.blue_team_id==tid||m.red_team_id==tid){r.push((m.blue_team_id==tid)===m.blue_win);if(r.length>=n)break;}}return r;}
 function streak(f){if(!f.length)return '';let s=1;for(let i=1;i<f.length;i++){if(f[i]===f[0])s++;else break;}return s>=2?(s+(f[0]?'-game win streak':'-game skid')):'';}
 function deskResults(limit){
-  const cand=D.matches.slice(0,40).map(m=>{const wT=m.blue_win?m.blue_team_id:m.red_team_id,lT=m.blue_win?m.red_team_id:m.blue_team_id;
-    const wp=m.blue_win?(m.blue_perf||{}):(m.red_perf||{}),lp=m.blue_win?(m.red_perf||{}):(m.blue_perf||{});
-    const kd=(wp.kills||0)-(lp.kills||0),gd=(wp.total_gold||0)-(lp.total_gold||0);
-    const wR=teamRank(wT),lR=teamRank(lT),upset=!!(wR&&lR&&wR.rank>=lR.rank+3);
-    let mvp=null,best=-1;m.picks.filter(p=>p.blue===m.blue_win).forEach(p=>{const sc=(p.kills||0)*2+(p.deal||0)/1500-(p.deaths||0);if(sc>best){best=sc;mvp=p;}});
-    return {m,wT,lT,kd,gd,upset,mvp,score:(upset?120:0)+kd*3+gd/1200};});
+  // Drive off the SCHEDULE's completed series (authoritative aw/bw the mod resolved from
+  // MatchInfo.replays) — replays alone can't be grouped into series client-side (no parent-match
+  // id), which made single-game "X stun Y" headlines that contradicted the game-wire's series result.
+  const done=[],seen={};
+  D.competitions.forEach(c=>{(c.sched||[]).concat(c.bracket||[]).forEach(m=>{
+    if(!m.done||m.a==null||m.b==null||seen[m.id])return;seen[m.id]=1;done.push(m);});});
+  const cand=done.map(m=>{
+    const aWon=m.aw>=m.bw,wT=aWon?m.a:m.b,lT=aWon?m.b:m.a,ws=Math.max(m.aw,m.bw),ls=Math.min(m.aw,m.bw);
+    let kd=0,gd=0,mvp=null,best=-1; // flavour from the winner's won games between these two teams
+    h2hGames(wT,lT).forEach(g=>{if((g.blue_win?g.blue_team_id:g.red_team_id)!==wT)return;
+      const wp=g.blue_win?(g.blue_perf||{}):(g.red_perf||{}),lp=g.blue_win?(g.red_perf||{}):(g.blue_perf||{});
+      kd+=(wp.kills||0)-(lp.kills||0);gd+=(wp.total_gold||0)-(lp.total_gold||0);
+      g.picks.filter(p=>p.blue===g.blue_win).forEach(p=>{const v=(p.kills||0)*2+(p.deal||0)/1500-(p.deaths||0);if(v>best){best=v;mvp=p;}});});
+    const wR=teamRank(wT),lR=teamRank(lT),upset=!!(wR&&lR&&wR.rank>=lR.rank+3),sweep=ls===0&&ws>=2;
+    return {rep:m.rep,wT,lT,ws,ls,kd,gd,upset,sweep,mvp,score:(upset?120:0)+(sweep?20:0)+kd*3+gd/1200};});
   const UPV=['stun','shock','topple','ambush'],DOMV=['demolish','dismantle','run over','steamroll'],EDGV=['edge','squeak past','outlast','hold off'];
   const UPB=['pulled off the upset against','sent shockwaves through the league by beating','had no business beating — yet took down','pulled the rug out from under'];
-  const pick=(arr,i)=>arr[i%arr.length];
+  const pk=(arr,i)=>arr[i%arr.length];
   return cand.sort((a,b)=>b.score-a.score).slice(0,limit).map((s,i)=>{
-    const w=tName(s.wT),l=tName(s.lT);
-    const head=s.upset?(w+' '+pick(UPV,i)+' '+l):(w+' '+pick(s.kd>=10?DOMV:EDGV,i)+' '+l);
-    let blurb=s.upset?(w+' '+pick(UPB,i)+' '+l):(w+' '+(s.kd>=10?'overpowered':'got past')+' '+l);
+    const w=tName(s.wT),l=tName(s.lT),sl=s.ws+'–'+s.ls,dom=s.sweep||s.kd>=10;
+    const head=(s.upset?(w+' '+pk(UPV,i)+' '+l):(w+' '+pk(dom?DOMV:EDGV,i)+' '+l))+' '+sl;
+    let blurb=(s.upset?(w+' '+pk(UPB,i)+' '+l):(w+' '+(dom?'overpowered':'got past')+' '+l))+' '+sl;
     if(s.mvp){const a=athById[s.mvp.athlete_id];blurb+=', powered by '+(a?a.name:'a standout')+'’s '+(s.mvp.kills||0)+' kills on '+champName(s.mvp.champion);}
-    return {head,blurb:blurb+'.',tag:s.upset?'Upset':'Result',cls:s.upset?'up':'',link:'#/match/'+s.m.id,score:s.score,desk:'Results'};});
+    return {head,blurb:blurb+'.',tag:s.upset?'Upset':'Result',cls:s.upset?'up':'',link:(s.rep!=null?'#/match/'+s.rep:'#/matches'),score:s.score,desk:'Results'};});
 }
 function deskStandings(limit){const out=[];
   D.leagues.forEach(l=>{const c=(compsByLeague[l.id]||[])[0];if(c&&c.standings[0]){const s=c.standings[0],st=streak(teamForm(s.team_id,6));
@@ -350,51 +359,78 @@ function teamStar(tid){return D.athletes.filter(a=>a.team_id==tid&&a.matches>0).
 function recStr(r){return r?(r.s.win+'–'+r.s.lose):'';}
 function formDots(tid,n){return teamForm(tid,n||5).map(w=>'<span class="'+(w?'win':'loss')+'">'+(w?'W':'L')+'</span>').join('');}
 function h2hGames(a,b){return D.matches.filter(m=>(m.blue_team_id==a&&m.red_team_id==b)||(m.blue_team_id==b&&m.red_team_id==a));}
+// Name-ONLY links for article prose (logos/avatars belong in tables/cards, not mid-sentence).
+const tLinkT=id=>'<a href="#/team/'+id+'">'+esc(tName(id))+'</a>';
+const aLinkT=id=>athById[id]?'<a href="#/player/'+id+'">'+esc(athById[id].name)+'</a>':('#'+id);
+const cLinkT=name=>'<a href="#/champion/'+encodeURIComponent(name)+'">'+esc(champName(name))+'</a>';
+function statLabel(field){if(typeof ATTR_DEFS!=='undefined')for(const d of ATTR_DEFS)if(d[1]===field)return d[0];return cap(String(field).replace(/_/g,' '));}
+function statChangeLine(sc){const parts=[];String(sc||'').split(';').forEach(e=>{const x=e.split('|');if(x.length>=3){const f=x[0].split('?').pop().split('.').pop();parts.push(statLabel(f)+' '+x[1]+'→'+x[2]);}});return parts;}
+function synthTraining(it,i){const a=athBind(it),T=teamBind(it,'Team'),changes=statChangeLine(bindVal(it,'StatChanges'));
+  if(!a&&!changes.length)return null;
+  const n=+bindVal(it,'Amount')||changes.length;
+  let p='<p>'+(a?aLinkT(a.id):'A player')+(T?' of '+tLinkT(T.id):'')+'’s latest training cycle '+pick(['flagged','recorded','came back with'],i)+' '+n+' stat decline'+(n===1?'':'s')+'.</p>';
+  if(changes.length)p+='<p class="bynum">'+changes.join('  ·  ')+'</p>';
+  p+='<p>One wobble is rarely a problem, but repeated drops on the same player can derail a development plan — worth checking whether it’s a condition dip or a training-direction mismatch.</p>';
+  return p;}
+function synthDecision(it,i){const a=athBind(it);if(!a)return null;
+  let p='<p>A management call looms over '+aLinkT(a.id)+(a.team_id!=null?' of '+tLinkT(a.team_id):'')+'.';
+  if(a.matches>0)p+=' '+esc(a.name)+' is carrying a <b>'+avgRating(a.rating,a.matches)+'</b> rating across '+a.matches+' game'+(a.matches>1?'s':'')+' this season, so how the staff handle it could swing the run-in.';
+  else p+=' How the staff handle it could shape the player’s season.';
+  return p+'</p>';}
 function synthMatch(it,i){const A=teamBind(it,'MyTeam'),B=teamBind(it,'EnemyTeam');if(!A||!B)return null;
   // Narrate from A (MyTeam = the article's subject, matching the game headline) but pick
   // the win/loss language from the REAL scoreline so the body can't contradict the result.
   const as=+bindVal(it,'MyScore')||0,bs=+bindVal(it,'EnemyScore')||0,aWon=as>=bs,win=aWon?A:B,close=Math.abs(as-bs)<=1;
   const WV=close?['edged','outlasted','held off','squeezed past']:['dispatched','rolled past','took apart','overpowered'];
   const LV=close?['fell just short against','were edged by','dropped a tight one to','came up short against']:['were dispatched by','fell to','were overpowered by','got rolled by'];
-  let p='<p>'+tLink(A.id)+' '+pick(aWon?WV:LV,i)+' '+tLink(B.id)+' <b>'+as+'–'+bs+'</b>'+(close?' in a series that went the distance':'')+'.';
+  let p='<p>'+tLinkT(A.id)+' '+pick(aWon?WV:LV,i)+' '+tLinkT(B.id)+' <b>'+as+'–'+bs+'</b>'+(close?' in a series that went the distance':'')+'.';
   const wr=teamRank(win.id);if(wr)p+=' '+esc(win.name)+' '+pick(['move to','sit','now hold'],i)+' '+rankPhrase(wr)+(leagueName(win)?' in '+esc(leagueName(win)):'')+'.';
   p+='</p>';
   const games=h2hGames(A.id,B.id);let mvp=null,best=-1,mg=null;
   games.forEach(m=>{const wid=m.blue_win?m.blue_team_id:m.red_team_id;if(wid!=win.id)return;m.picks.filter(x=>x.blue===m.blue_win).forEach(x=>{const sc=(x.kills||0)*2+(x.assists||0)-(x.deaths||0)*1.5+(x.deal||0)/2000;if(sc>best){best=sc;mvp=x;mg=m;}});});
-  if(mvp){const a=athById[mvp.athlete_id];p+='<p>'+(a?aLink(a.id):'A standout')+' of '+tLink(win.id)+' set the tempo on '+cLink(mvp.champion)+', posting <b>'+(mvp.kills||0)+'/'+(mvp.deaths||0)+'/'+(mvp.assists||0)+'</b>'+(mvp.deal?' for '+(mvp.deal).toLocaleString()+' damage':'')+(mg?' — <a href="#/match/'+mg.id+'">view game</a>':'')+'.</p>';}
+  if(mvp){const a=athById[mvp.athlete_id];p+='<p>'+(a?aLinkT(a.id):'A standout')+' of '+tLinkT(win.id)+' set the tempo on '+cLinkT(mvp.champion)+', posting <b>'+(mvp.kills||0)+'/'+(mvp.deaths||0)+'/'+(mvp.assists||0)+'</b>'+(mvp.deal?' for '+(mvp.deal).toLocaleString()+' damage':'')+(mg?' — <a href="#/match/'+mg.id+'">view game</a>':'')+'.</p>';}
   return p;}
 function synthPreMatch(it,i){const A=teamBind(it,'Team')||teamByName[String(bindVal(it,'TeamName')||'').toLowerCase()],B=teamBind(it,'EnemyTeam');if(!A&&!B)return null;
   if(A&&B){const ar=teamRank(A.id),br=teamRank(B.id),sa=teamStar(A.id),sb=teamStar(B.id);
-    let p='<p>'+tLink(A.id)+(ar?' ('+rankPhrase(ar)+', '+recStr(ar)+')':'')+' '+pick(['square off with','run into','take on','meet'],i)+' '+tLink(B.id)+(br?' ('+rankPhrase(br)+', '+recStr(br)+')':'')+'.';
-    if(sa||sb)p+=' Eyes on '+(sa?aLink(sa.id)+' ('+avgRating(sa.rating,sa.matches)+')':'')+(sa&&sb?' and ':'')+(sb?aLink(sb.id)+' ('+avgRating(sb.rating,sb.matches)+')':'')+'.';
+    let p='<p>'+tLinkT(A.id)+(ar?' ('+rankPhrase(ar)+', '+recStr(ar)+')':'')+' '+pick(['square off with','run into','take on','meet'],i)+' '+tLinkT(B.id)+(br?' ('+rankPhrase(br)+', '+recStr(br)+')':'')+'.';
+    if(sa||sb)p+=' Eyes on '+(sa?aLinkT(sa.id)+' ('+avgRating(sa.rating,sa.matches)+')':'')+(sa&&sb?' and ':'')+(sb?aLinkT(sb.id)+' ('+avgRating(sb.rating,sb.matches)+')':'')+'.';
     p+='</p>';
     const h=h2hGames(A.id,B.id);if(h.length){let aw=0;h.forEach(m=>{if((m.blue_win?m.blue_team_id:m.red_team_id)==A.id)aw++;});const bw=h.length-aw,verb=aw>bw?'lead':aw<bw?'trail':'are level in';p+='<p>They have met '+h.length+' time'+(h.length>1?'s':'')+' recently; '+esc(A.name)+' '+verb+' the head-to-head '+aw+'–'+bw+'.</p>';}
     p+='<p class="bynum">Form — '+esc(A.name)+': '+(formDots(A.id)||'—')+' &nbsp;·&nbsp; '+esc(B.name)+': '+(formDots(B.id)||'—')+'</p>';return p;}
   const T=A||B,r=teamRank(T.id),st=teamStar(T.id);
-  let p='<p>'+tLink(T.id)+' '+pick(['head into the fixture','prep for the next test','look to bank points'],i)+(r?' '+rankPhrase(r)+' on a '+recStr(r)+' record':'')+'.';
-  if(st)p+=' '+aLink(st.id)+' leads the side ('+avgRating(st.rating,st.matches)+' rating'+(st.mvp?', '+st.mvp+' MVP'+(st.mvp>1?'s':''):'')+').';
+  let p='<p>'+tLinkT(T.id)+' '+pick(['head into the fixture','prep for the next test','look to bank points'],i)+(r?' '+rankPhrase(r)+' on a '+recStr(r)+' record':'')+'.';
+  if(st)p+=' '+aLinkT(st.id)+' leads the side ('+avgRating(st.rating,st.matches)+' rating'+(st.mvp?', '+st.mvp+' MVP'+(st.mvp>1?'s':''):'')+').';
   return p+'</p><p class="bynum">Form: '+(formDots(T.id,6)||'—')+'</p>';}
-function synthPlayer(it,i){const a=athBind(it);if(!a||a.matches<1)return null; // no perf yet → let the topical game text speak
-  const kda=a.deaths?((a.kills+a.assists)/a.deaths).toFixed(2):'—';
-  let p='<p>'+aLink(a.id)+(a.team_id!=null?' of '+tLink(a.team_id):'')+' '+pick(['has been turning heads','is putting together a strong run','has been a focal point','keeps showing up when it matters'],i)+'.';
-  p+=' Over '+a.matches+' games this season, '+esc(a.name)+' is averaging a <b>'+avgRating(a.rating,a.matches)+'</b> rating on a '+kda+' KDA'+(a.mvp?', with '+a.mvp+' MVP'+(a.mvp>1?'s':''):'')+'.</p>';
-  if(a.recent_champions&&a.recent_champions.length)p+='<p>Signature picks: '+a.recent_champions.slice(0,4).map(c=>cLink(c)).join(', ')+'.</p>';
-  return p;}
+function synthPlayer(it,i){const a=athBind(it);if(!a)return null;
+  // Topic-aware: LEAD with the game's actual story (broadcast hours, condition, training…),
+  // spacing-fixed + linkified, THEN ground it with the player's competitive form when they've played.
+  const g=resolveBody(it);
+  const lead=g?linkifyNews(g,it).split(/\n+/).map(s=>s.trim()).filter(Boolean).map(s=>'<p>'+s+'</p>').join(''):'';
+  let data='';
+  if(a.matches>0){const kda=a.deaths?((a.kills+a.assists)/a.deaths).toFixed(2):'—';
+    const intro=lead?(pick(['On the rift, ','In competition, ','Between the lines, '],i)+esc(a.name)):(aLinkT(a.id)+(a.team_id!=null?' of '+tLinkT(a.team_id):''));
+    data='<p>'+intro+' is averaging a <b>'+avgRating(a.rating,a.matches)+'</b> rating on a '+kda+' KDA across '+a.matches+' game'+(a.matches>1?'s':'')+(a.mvp?', with '+a.mvp+' MVP'+(a.mvp>1?'s':''):'')+'.</p>';
+    if(a.recent_champions&&a.recent_champions.length)data+='<p>Signature picks: '+a.recent_champions.slice(0,4).map(c=>cLink(c)).join(', ')+'.</p>';}
+  return (lead+data)||null;}
 function synthTransfer(it,i){const buy=teamBind(it,'BuyTeam'),sell=teamBind(it,'SellTeam'),ath=athBind(it);
-  if(buy&&ath){let p='<p>'+aLink(ath.id)+' '+pick(['completes a switch','is on the move','has agreed terms','changes colours'],i)+(sell?' from '+tLink(sell.id):'')+' to '+tLink(buy.id)+(bindVal(it,'Money')?' for '+esc(bindVal(it,'Money')):'')+'.';
-    if(ath.matches>0)p+=' '+esc(ath.name)+' arrives with a '+avgRating(ath.rating,ath.matches)+' rating from '+ath.matches+' games last on the books.';
+  if(buy&&ath){let p='<p>'+aLinkT(ath.id)+' '+pick(['completes a switch','is on the move','has agreed terms','changes colours'],i)+(sell?' from '+tLinkT(sell.id):'')+' to '+tLinkT(buy.id)+(bindVal(it,'Money')?' for '+esc(bindVal(it,'Money')):'')+'.';
+    if(ath.matches>0)p+=' '+esc(ath.name)+' arrives with a <b>'+avgRating(ath.rating,ath.matches)+'</b> rating from '+ath.matches+' game'+(ath.matches>1?'s':'')+' last on the books.';
     return p+'</p>';}
   const T=teamBind(it,'Team'),pos=bindVal(it,'Position');
   if(T&&pos){const PI={top:0,jungle:1,jng:1,mid:2,bottom:3,bot:3,support:4,sup:4}[String(pos).toLowerCase()];
     const st=(PI!=null&&T.roster&&T.roster[PI]!=null)?athById[T.roster[PI]]:null;
-    let p='<p>'+tLink(T.id)+' '+pick(['are reportedly thin','have a question mark','look light'],i)+' at <b>'+esc(pos)+'</b>.';
-    if(st)p+=' '+aLink(st.id)+' holds the spot'+(st.matches>0?' ('+avgRating(st.rating,st.matches)+' rating)':'')+', but the depth behind looks shallow.';
+    let p='<p>'+tLinkT(T.id)+' '+pick(['are reportedly thin','have a question mark','look light'],i)+' at <b>'+esc(pos)+'</b>.';
+    if(st)p+=' '+aLinkT(st.id)+' holds the spot'+(st.matches>0?' ('+avgRating(st.rating,st.matches)+' rating)':'')+', but the depth behind looks shallow.';
     if(T.finance)p+=' A transfer budget of '+money(T.finance.transfer_budget)+' gives the front office room to act.';
+    return p+'</p>';}
+  // recruit_to_other_team: a player drawing interest from another club (Athlete + the suitor Team).
+  if(ath&&T){let p='<p>'+aLinkT(ath.id)+(ath.team_id!=null?' of '+tLinkT(ath.team_id):'')+' '+pick(['is drawing interest from','has been linked with','is on the radar at'],i)+' '+tLinkT(T.id)+'.';
+    if(ath.matches>0)p+=' '+esc(ath.name)+' brings a <b>'+avgRating(ath.rating,ath.matches)+'</b> rating from '+ath.matches+' game'+(ath.matches>1?'s':'')+' this season.';
     return p+'</p>';}
   return null;}
 function synthSeason(it,i){const T=teamBind(it,'Team')||teamByName[String(bindVal(it,'TeamName')||'').toLowerCase()];if(!T)return null;
   const r=teamRank(T.id),l=leagueById[T.league_id];
-  let p='<p>'+tLink(T.id)+' '+pick(['open a fresh chapter','set their sights ahead','look to climb'],i)+(l?' in '+esc(l.name):'')+'.';
+  let p='<p>'+tLinkT(T.id)+' '+pick(['open a fresh chapter','set their sights ahead','look to climb'],i)+(l?' in '+esc(l.name):'')+'.';
   if(r)p+=' They sit '+rankPhrase(r)+' on a '+recStr(r)+' record.';
   const prize=l&&l.prize_pool?l.prize_pool.reduce((x,y)=>x+y,0):0,pm=money(prize);if(prize>0&&pm!=='$0')p+=' The league carries a '+pm+' prize pool.';
   p+='</p>';
@@ -403,8 +439,8 @@ function synthSeason(it,i){const T=teamBind(it,'Team')||teamByName[String(bindVa
   return p;}
 // Fallback: the game's own (spacing-fixed) body, with bind-named entities linked.
 function linkifyNews(text,it){let h=esc(text);const subs=[];
-  ['Team','EnemyTeam','SellTeam','BuyTeam','MyTeam','TeamName'].forEach(k=>{const v=bindVal(it,k);if(v&&teamByName[String(v).toLowerCase()])subs.push([v,tLink(teamByName[String(v).toLowerCase()].id)]);});
-  const a=athBind(it);if(a)subs.push([a.name,aLink(a.id)]);
+  ['Team','EnemyTeam','SellTeam','BuyTeam','MyTeam','TeamName'].forEach(k=>{const v=bindVal(it,k);if(v&&teamByName[String(v).toLowerCase()])subs.push([v,tLinkT(teamByName[String(v).toLowerCase()].id)]);});
+  const a=athBind(it);if(a)subs.push([a.name,aLinkT(a.id)]);
   subs.sort((x,y)=>String(y[0]).length-String(x[0]).length).forEach(([nm,link])=>{h=h.split(esc(nm)).join(link);});
   return h;}
 function articleBody(it,i){i=i||0;const sc=newsScope(it);let h=null;
@@ -413,15 +449,18 @@ function articleBody(it,i){i=i||0;const sc=newsScope(it);let h=null;
   else if(sc==='player')h=synthPlayer(it,i);
   else if(sc==='transfer'||sc==='transfer_gossip'||sc==='recruit_to_other_team'||sc==='end_recruit')h=synthTransfer(it,i);
   else if(sc==='season'||sc==='international_seed')h=synthSeason(it,i);
+  else if(sc==='training'||sc==='training_report')h=synthTraining(it,i);
+  else if(sc==='decision')h=synthDecision(it,i);
   if(h)return h;
   const g=resolveBody(it);
   if(g)return linkifyNews(g,it).split(/\n+/).map(s=>s.trim()).filter(Boolean).map(s=>'<p>'+s+'</p>').join('');
   return null;}
 function articleExcerpt(it,i){
-  // Drop crest/badge/avatar spans first — their initials are TEXT, so a bare stripTags
-  // would leave "DGDead Game"; the logo (.cico) / sprite (.spr) spans hold no text.
-  const h=String(articleBody(it,i)||headline(it,i)||'').replace(/<span class="(?:crest|badge|avatar)[^"]*"[^>]*>[^<]*<\/span>/g,'');
-  return clip(stripTags(h),190);}
+  // No synthesized/game body → no excerpt (the office card then shows just the headline,
+  // instead of echoing it). Otherwise drop crest/badge/avatar spans (their initials are
+  // TEXT → would leave "DGDead Game") before flattening to plain text.
+  const b=articleBody(it,i);if(!b)return '';
+  return clip(stripTags(String(b).replace(/<span class="(?:crest|badge|avatar)[^"]*"[^>]*>[^<]*<\/span>/g,'')),190);}
 // Synthesize a plain-text headline from our data (accurate where the game's wording isn't,
 // and available even on the in-game page where NEWS_TEXT — the i18n table — is absent).
 function synthHead(it,i){const sc=newsScope(it);
