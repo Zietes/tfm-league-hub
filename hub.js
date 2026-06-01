@@ -124,7 +124,7 @@ function makeSortable(t){[...t.tHead.rows[0].cells].forEach((th,i)=>{if('nosort'
     rows.forEach(r=>tb.appendChild(r));};});}
 function mount(html){const app=document.getElementById('app');app.innerHTML=html;app.querySelectorAll('table.s').forEach(makeSortable);}
 function nav(){document.getElementById('nav').innerHTML='<span class="brand">🏆 League Hub</span>'+
-  '<a href="#/">Standings</a><a href="#/news">News</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/matches">Matches</a>'+
+  '<a href="#/">Home</a><a href="#/standings">Standings</a><a href="#/news">News</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/matches">Matches</a>'+
   '<input id="q" placeholder="Search teams, players, champions…"><span class="upd">#'+(D.updated||0)+'</span>';
   const q=document.getElementById('q');q.oninput=()=>{const v=q.value.trim();location.hash=v?('#/search/'+encodeURIComponent(v)):'#/';};}
 function statCell(l,v,cls){return '<div><span class="l">'+esc(l)+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>';}
@@ -132,6 +132,40 @@ function heroHeader(art,kick,title,sub,stats){return '<div class="hero">'+(art?'
   '<div class="ht"><div class="kick">'+esc(kick)+'</div><h1>'+title+'</h1>'+(sub?'<p class="sub">'+sub+'</p>':'')+
   (stats&&stats.length?'<div class="statline">'+stats.join('')+'</div>':'')+'</div></div>';}
 function scrollToEl(id){const e=document.getElementById(id);if(e)e.scrollIntoView({behavior:'smooth',block:'start'});}
+// ===== Home / landing: a "portal front door" — bold hero, the featured storyline,
+// a meta snapshot, and section tiles that route into the hub (each with a live highlight). =====
+function vHome(){
+  const leaders=[];D.competitions.forEach(c=>{if(c.standings&&c.standings[0])leaders.push(c.standings[0]);});leaders.sort((a,b)=>b.points-a.points);
+  const lead0=leaders[0];
+  // Featured story = top synthesized story (exclude transfers — their fee-based score skews the pool).
+  const feat=[].concat(deskResults(2),deskStandings(1),deskMeta(1),deskPlayers(1)).filter(Boolean).sort((a,b)=>b.score-a.score)[0];
+  const topP=D.athletes.filter(a=>a.matches>=3).sort((a,b)=>(b.rating/(b.matches*10))-(a.rating/(a.matches*10)))[0];
+  const ranked=D.champions.map(c=>({c,m:champMeta(c)})).filter(x=>x.m).sort((a,b)=>b.m.score-a.m.score);
+  const topC=ranked[0]&&ranked[0].c;const lastM=D.matches&&D.matches[0];
+  // hero
+  let h='<section class="home-hero"><div class="hh-badge"><span class="livedot"></span>LIVE'+(D.today?' · '+esc(D.today):'')+'</div>'
+    +'<h1 class="hh-title">League <span>Hub</span></h1>'
+    +'<p class="hh-tag">'+D.leagues.length+' divisions, '+D.teams.length+' clubs, one table that never stops moving.</p>'
+    +'<div class="hh-stats">'+[['Divisions',D.leagues.length],['Clubs',D.teams.length],['Champions',D.champions.length],['Leader',lead0?esc(tName(lead0.team_id)):'—']]
+      .map(s=>'<div class="hh-stat"><span class="l">'+s[0]+'</span><span class="v">'+s[1]+'</span></div>').join('')+'</div></section>';
+  // featured storyline
+  if(feat)h+='<a class="home-lead" href="'+feat.link+'"><span class="ntag '+(feat.cls||'')+'">'+esc(feat.tag)+'</span><div class="hl-h">'+esc(feat.head)+'</div><p class="hl-b">'+esc(feat.blurb)+'</p><span class="byline">The '+esc(feat.desk||'News')+' Desk →</span></a>';
+  // meta snapshot — top champions as grounded icon chips
+  if(ranked.length)h+='<section class="home-sec"><div class="sec-h"><h3>Meta Snapshot</h3><a class="rc-more" href="#/champions">full tier list →</a></div><div class="tier-band">'
+    +ranked.slice(0,10).map(x=>'<a class="tband-chip" href="#/champion/'+encodeURIComponent(x.c.name)+'">'+champIcon(x.c.name,32,true,'show')+'<span>'+esc(champName(x.c.name))+'</span></a>').join('')+'</div></section>';
+  // explore tiles (each a live highlight + a route in)
+  const tile=(href,kick,big,sub,art,emoji)=>'<a class="tile" href="'+href+'"><div class="tile-art'+(emoji?' emoji':'')+'">'+(art||emoji||'')+'</div><div class="tile-b"><span class="tile-k">'+kick+'</span><div class="tile-big">'+big+'</div>'+(sub?'<span class="tile-s">'+sub+'</span>':'')+'</div><span class="tile-arrow">→</span></a>';
+  let tiles='';
+  tiles+=tile('#/standings','Standings',lead0?esc(tName(lead0.team_id)):'View table',lead0?'leads on '+lead0.points+' pts':'custom-points standings',lead0?teamLogo(lead0.team_id,40):'');
+  tiles+=tile('#/leagues','Leagues',D.leagues.length+' divisions','across six regions','','🏆');
+  tiles+=tile('#/players','Players',topP?esc(topP.name):'Browse',topP?'top rating '+avgRating(topP.rating,topP.matches):D.athletes.length+' athletes',topP?avatar(topP.id,40):'');
+  tiles+=tile('#/champions','Champions',topC?esc(champName(topC.name)):'Tier list',topC?'tops the meta':D.champions.length+' champions',topC?champIcon(topC.name,40,true,'bare'):'');
+  tiles+=tile('#/matches','Matches',lastM?esc(tName(lastM.blue_win?lastM.blue_team_id:lastM.red_team_id))+' won':'Results',lastM?'latest result':'recent games',lastM?teamLogo(lastM.blue_win?lastM.blue_team_id:lastM.red_team_id,40):'');
+  tiles+=tile('#/news','Newsroom',feat?esc(clip(feat.head,34)):'The Wire','synthesized desks & wire','','📰');
+  tiles+=tile('#/teams','Teams',D.teams.length+' clubs','rosters, finances & form','','🛡️');
+  h+='<section class="home-sec"><div class="sec-h"><h3>Explore the Hub</h3></div><div class="tiles">'+tiles+'</div></section>';
+  mount(h);
+}
 function vStandings(){
   let h=heroHeader('','League Hub','Standings','Custom-points standings · auto-updating live',
     [statCell('Leagues',D.leagues.length),statCell('Teams',D.teams.length),statCell('Update','#'+(D.updated||0))]);
@@ -547,10 +581,10 @@ function vSearch(q){q=String(q||'').toLowerCase();
   h+='<h2>Players</h2><div class="chips">'+(pl.map(a=>'<span>'+aLink(a.id)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   h+='<h2>Champions</h2><div class="chips">'+(ch.map(c=>'<span>'+cLink(c.name)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';mount(h);}
 function setActiveNav(){const seg=location.hash.replace(/^#\/?/,'').split('/')[0]||'';
-  const m={'':'#/',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players',champions:'#/champions',champion:'#/champions',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
+  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players',champions:'#/champions',champion:'#/champions',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
   const want=m[seg]||'#/';document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')===want));}
 function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);
-  switch(p[0]){case '':return vStandings();case 'news':return vNews();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
+  switch(p[0]){case '':return vHome();case 'standings':return vStandings();case 'news':return vNews();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
     case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'champions':return vChampions();
     case 'champion':return vChampion(p.slice(1).join('/'));case 'matches':return vMatches();case 'match':return vMatch(+p[1]);
     case 'leagues':return vLeagues();case 'league':return vLeague(+p[1]);
