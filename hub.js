@@ -309,12 +309,12 @@ function deskPlayers(limit){const out=[];const e=D.athletes.filter(a=>a.matches>
   const m=[...e].sort((a,b)=>b.mvp-a.mvp)[0];if(m&&m.mvp>0&&(!por||m.id!==por.id))out.push({head:m.name+' is collecting hardware',blurb:m.name+' has claimed '+m.mvp+' MVP'+(m.mvp>1?'s':'')+' so far this season.',tag:'Player',link:'#/player/'+m.id,score:62,desk:'Player Spotlight'});
   const k=[...e].filter(a=>a.deaths>0).sort((a,b)=>((b.kills+b.assists)/b.deaths)-((a.kills+a.assists)/a.deaths))[0];if(k&&(!por||k.id!==por.id)&&(!m||k.id!==m.id))out.push({head:k.name+' is nearly unkillable',blurb:k.name+' sports a league-best '+((k.kills+k.assists)/k.deaths).toFixed(1)+' KDA.',tag:'Player',link:'#/player/'+k.id,score:50,desk:'Player Spotlight'});
   return out.slice(0,limit);}
-function deskTransfers(limit){const out=[];if(!D.transfers||!D.transfers.length)return out;
-  for(const t of D.transfers){const a=athById[t.athlete_id],who=a?a.name:('Player #'+t.athlete_id);
-    const to=tName(t.to),from=t.from!=null?tName(t.from):null;
-    const fee=(t.fee>0)?(' for '+money(t.fee)):(from?' on a free transfer':'');
-    const head=from?(who+': '+from+' → '+to):(who+' signs with '+to);
-    const blurb=(from?(who+' moves from '+from+' to '+to+fee):(who+' joins '+to))+(t.salary>0?(' · '+money(t.salary)+'/wk'):'')+'.';
+function deskTransfers(limit){const out=[];if(!D.transfers)return out;
+  for(const t of D.transfers){if(t.from==null)continue; // debut/initial signings are career history, not transfer news
+    const a=athById[t.athlete_id],who=a?a.name:('Player #'+t.athlete_id),to=tName(t.to),from=tName(t.from);
+    const fee=t.fee>0?(' for '+money(t.fee)):' on a free transfer';
+    const head=who+': '+from+' → '+to;
+    const blurb=who+' moves from '+from+' to '+to+fee+(t.salary>0?(' · '+money(t.salary)+'/wk'):'')+'.';
     out.push({head,blurb,tag:'Transfer',link:'#/player/'+t.athlete_id,score:(t.fee||0)+1,desk:'Transfers'});
     if(out.length>=limit)break;}
   return out;}
@@ -357,9 +357,9 @@ function vArticle(i){const it=D.news&&D.news[+i];if(!it)return mount('<h1>Articl
   if(it.team!=null&&teamById[it.team])h+='<p>Related: '+tLink(it.team)+'</p>';
   mount(h);
 }
-function vTransfers(){const ts=D.transfers||[];
+function vTransfers(){const ts=(D.transfers||[]).filter(t=>t.from!=null); // moves only; debut signings live on player profiles
   let h='<h1>Transfers</h1><p class="sub">'+ts.length+' recent move'+(ts.length===1?'':'s')+' across the leagues</p>';
-  if(!ts.length)return mount(h+'<p class="sub">No transfers recorded yet — they accrue as the season runs.</p>');
+  if(!ts.length)return mount(h+'<p class="sub">No transfers yet — initial squads are set; moves accrue once the transfer window opens.</p>');
   h+='<table class="s"><thead><tr><th>Date</th><th>Player</th><th>From</th><th>To</th><th data-num>Fee</th><th data-num>Salary</th></tr></thead><tbody>';
   ts.forEach(t=>{h+='<tr><td class="sub">'+esc(t.date||'')+'</td><td>'+aLink(t.athlete_id)+'</td><td>'+(t.from!=null?tLink(t.from):'<span class="sub">debut</span>')+'</td><td>'+tLink(t.to)+'</td><td class="num" data-s="'+(t.fee||0)+'">'+(t.fee>0?money(t.fee):'—')+'</td><td class="num" data-s="'+(t.salary||0)+'">'+(t.salary>0?money(t.salary)+'/wk':'—')+'</td></tr>';});
   mount(h+'</tbody></table>');
