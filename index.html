@@ -305,6 +305,19 @@ a.ichip,a.itxt{text-decoration:none;color:var(--link)}a.ichip:hover,a.itxt:hover
 .pvp-pools{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:6px 0 18px}
 .pp-h{font-weight:700;color:#fff;margin-bottom:6px}
 @media(max-width:560px){.pvp-pools{grid-template-columns:1fr}}
+/* multi-league switcher in the nav */
+.lgswitch{position:relative;display:inline-block;margin:0 6px}
+.lgswitch summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border:1px solid var(--line2);border-radius:999px;background:var(--surface);color:var(--fg);font-size:12px;font-weight:700;white-space:nowrap}
+.lgswitch summary::-webkit-details-marker{display:none}
+.lgswitch summary::after{content:"▾";color:var(--mut);font-size:10px}
+.lgswitch[open] summary{border-color:var(--acd);color:#fff}
+.lgmenu{position:absolute;top:calc(100% + 7px);left:0;z-index:200;min-width:230px;max-width:300px;background:var(--surface);border:1px solid var(--line2);border-radius:10px;box-shadow:0 14px 34px rgba(0,0,0,.55);padding:6px;display:flex;flex-direction:column;gap:2px}
+.lgmenu-h{font:700 9px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint);padding:5px 9px 3px}
+.lgitem{display:flex;flex-direction:column;padding:7px 9px;border-radius:7px;color:var(--fg);font-weight:600;font-size:13px}
+.lgitem:hover{background:var(--surface2);text-decoration:none;color:#fff}
+.lgitem.on{color:var(--ac)}
+.lgitem small{color:var(--mut);font:500 10px/1.3 var(--mono);margin-top:2px}
+.lgitem.rename{border-top:1px solid var(--line);margin-top:4px;color:var(--mut);font-size:12px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:12px}
 .tile{display:flex;align-items:center;gap:13px;padding:14px 15px;background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);transition:.14s}
 .tile:hover{border-color:var(--acd);transform:translateY(-2px);text-decoration:none;box-shadow:0 8px 22px rgba(0,0,0,.4)}
@@ -432,4 +445,4 @@ h2{scroll-margin-top:66px}
 footer{padding:18px 24px;margin-top:20px;color:var(--faint);font-size:12px;border-top:1px solid var(--line)}
 code{background:var(--surface2);border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:#bfe6ff;font:12px var(--mono)}
 ::-webkit-scrollbar{width:11px;height:11px}::-webkit-scrollbar-thumb{background:#2a3346;border-radius:6px;border:2px solid var(--bg)}::-webkit-scrollbar-track{background:transparent}
-</style></head><body><div id="nav"></div><div id="app"><p style="padding:24px;color:#8a93a9">Loading league data…</p></div><footer>League Hub · live standings &amp; analytics · updates automatically</footer><script src="icons.js"></script><script src="news_i18n.js"></script><script src="champ_data.js"></script><script src="item_data.js"></script><script>fetch("league_data.json",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){window.LEAGUE_DATA=d;return fetch("hub.js",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text()});}).then(function(code){var s=document.createElement("script");s.textContent=code;document.body.appendChild(s);}).catch(function(){document.getElementById("app").innerHTML="<h1>Could not load league data</h1><p class=\"sub\">league_data.json is missing or invalid.</p>";});</script></body></html>
+</style></head><body><div id="nav"></div><div id="app"><p style="padding:24px;color:#8a93a9">Loading league data…</p></div><footer>League Hub · live standings &amp; analytics · updates automatically</footer><script src="icons.js"></script><script src="news_i18n.js"></script><script src="champ_data.js"></script><script src="item_data.js"></script><script>(function(){function load(f){return fetch(f,{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json();});}function boot(d,idx,cur){window.LEAGUE_DATA=d;window.LEAGUES=idx;window.CURRENT_LEAGUE=cur;return fetch("hub.js",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.text();}).then(function(code){var s=document.createElement("script");s.textContent=code;document.body.appendChild(s);});}function pick(idx){var u=new URLSearchParams(location.search).get("lg"),saved=null;try{saved=localStorage.getItem("hub_league");}catch(e){}var ids=idx.map(function(e){return e.id;});return (u&&ids.indexOf(u)>=0)?u:(saved&&ids.indexOf(saved)>=0)?saved:idx[0].id;}fetch("leagues.json",{cache:"no-store"}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}).then(function(idx){if(idx&&idx.length){var sel=pick(idx),e=idx.filter(function(x){return x.id===sel;})[0]||idx[0];return load(e.file).then(function(d){return boot(d,idx,e.id);});}return load("league_data.json").then(function(d){return boot(d,null,null);});}).catch(function(){document.getElementById("app").innerHTML="<h1>Could not load league data</h1>";});})();</script></body></html>

@@ -189,7 +189,20 @@ function mount(html){const app=document.getElementById('app');app.innerHTML=html
   // Replay the staggered entrance only on real navigation (go()), never on the 20s data-refresh
   // re-render (would be a jarring fade every tick) — so clear the class when not revealing.
   if(_reveal){app.classList.remove('reveal');void app.offsetWidth;app.classList.add('reveal');}else app.classList.remove('reveal');}
-function nav(){document.getElementById('nav').innerHTML='<span class="brand">🏆 League Hub</span>'+
+// ---- multi-league switcher: window.LEAGUES (registry from leagues.json) + window.CURRENT_LEAGUE
+// (selected id) are set by the index shell. Absent in-game / single-mode → no switcher (graceful). ----
+function lgList(){return window.LEAGUES||[];}
+function lgRenames(){try{return JSON.parse(localStorage.getItem('hub_league_names')||'{}');}catch(e){return {};}}
+function lgLabelFor(id){const e=lgList().find(x=>x.id===id)||{};return lgRenames()[id]||e.label||id||'League';}
+function currentLeagueFile(){const e=lgList().find(x=>x.id===window.CURRENT_LEAGUE);return e?e.file:'league_data.json';}
+function switchLeague(id){if(id===window.CURRENT_LEAGUE)return;try{localStorage.setItem('hub_league',id);}catch(e){}location.search='?lg='+encodeURIComponent(id);}
+function renameLeague(id){const v=prompt('Name this league:',lgLabelFor(id));if(v==null)return;const m=lgRenames(),t=v.trim();if(t)m[id]=t;else delete m[id];try{localStorage.setItem('hub_league_names',JSON.stringify(m));}catch(e){}nav();}
+function lgSwitcher(){const L=lgList();if(!L.length)return '';
+  return '<details class="lgswitch"><summary>'+esc(lgLabelFor(window.CURRENT_LEAGUE))+'</summary><div class="lgmenu">'
+    +(L.length>1?'<div class="lgmenu-h">Leagues</div>':'')
+    +L.map(e=>'<a class="lgitem'+(e.id===window.CURRENT_LEAGUE?' on':'')+'" href="#" onclick="switchLeague(\''+e.id+'\');return false">'+esc(lgLabelFor(e.id))+'<small>'+(e.teams||0)+' teams'+(e.leagues?' · '+e.leagues+' divisions':'')+(e.today?' · '+esc(e.today):'')+'</small></a>').join('')
+    +'<a class="lgitem rename" href="#" onclick="renameLeague(\''+window.CURRENT_LEAGUE+'\');return false">✎ Rename this league</a></div></details>';}
+function nav(){document.getElementById('nav').innerHTML='<span class="brand">🏆 League Hub</span>'+lgSwitcher()+
   '<a href="#/">Home</a><a href="#/standings">Standings</a><a href="#/news">News</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/items">Items</a><a href="#/matches">Matches</a><a href="#/records">Records</a>'+
   '<input id="q" placeholder="Search teams, players, champions…"><span class="upd">#'+(D.updated||0)+'</span>';
   const q=document.getElementById('q');q.oninput=()=>{const v=q.value.trim();location.hash=v?('#/search/'+encodeURIComponent(v)):'#/';};}
@@ -1074,7 +1087,7 @@ function go(){_reveal=HOSTED;router();_reveal=false;renderRail();}
 // The local file:// broadcast page can't fetch a sibling, so it keeps its <meta refresh>
 // (the mod rewrites that whole file each tick); polling is skipped there.
 function startPolling(){if(!/^https?:$/.test(location.protocol))return;
-  setInterval(()=>{fetch('league_data.json',{cache:'no-store'}).then(r=>r.ok?r.json():null)
+  setInterval(()=>{fetch(currentLeagueFile(),{cache:'no-store'}).then(r=>r.ok?r.json():null)
     .then(d=>{if(d&&d.updated!==D.updated)applyData(d);}).catch(()=>{});},20000);}
 // A <meta refresh> reload can drop the URL fragment; restore the route before rendering.
 const savedRoute=sessionStorage.getItem('hub_route');
