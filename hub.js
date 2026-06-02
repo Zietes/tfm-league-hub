@@ -131,10 +131,22 @@ function playerTip(id){const a=athById[id];if(!a)return '';const t=a.team_id!=nu
   const bits=[];if(a.matches){bits.push('Rating '+avgRating(a.rating,a.matches));bits.push(a.wins+'–'+(a.matches-a.wins)+' · '+pct(a.wins,a.matches));}
   bits.push('Age '+a.age);
   return h+'<div class="ptip-stats">'+bits.join(' <span class="dot">·</span> ')+'</div>';}
-// One delegated hover tooltip for any [data-item] / [data-player] element; set up once, survives re-renders.
-function tipHTML(el){return el.hasAttribute('data-item')?itemTip(el.getAttribute('data-item')):el.hasAttribute('data-player')?playerTip(+el.getAttribute('data-player')):'';}
+// Team tooltip — league, league position/record, fans, balance (works in-game; only needs D data).
+function teamTip(id){const t=teamById[id];if(!t)return '';let rk=null,st=null;
+  for(const c of (compsByLeague[t.league_id]||[])){const idx=c.standings.findIndex(s=>s.team_id==id);if(idx>=0){rk=idx+1;st=c.standings[idx];break;}}
+  let h='<div class="itip-h"><span class="itip-n">'+esc(t.name)+'</span>'+(rk?'<span class="itip-t">#'+rk+'</span>':'')+'</div>'
+    +'<div class="ptip-team">'+teamLogo(t.id,18)+esc(lgName(t.league_id))+'</div>';
+  const bits=[];if(st)bits.push(st.win+'–'+st.lose+' · '+st.points+' pts');bits.push((t.fan_count||0).toLocaleString()+' fans');bits.push(money(t.balance));
+  return h+'<div class="ptip-stats">'+bits.join(' <span class="dot">·</span> ')+'</div>';}
+// One delegated hover tooltip; detection is HREF-based so EVERY player/item/team link gets a card —
+// including hand-built links (e.g. Role specialists) that don't carry a data-* attribute. Set up once.
+function tipHTML(el){const href=(el.getAttribute&&el.getAttribute('href'))||'';let m;
+  if(m=href.match(/^#\/player\/(\d+)/))return playerTip(+m[1]);
+  if(m=href.match(/^#\/team\/(\d+)/))return teamTip(+m[1]);
+  if(m=href.match(/^#\/item\/(.+)$/))return itemTip(decodeURIComponent(m[1]));
+  return '';}
 function setupTips(){if(window.__tips||typeof document==='undefined')return;window.__tips=1;
-  const tip=document.createElement('div');tip.id='itip';tip.style.display='none';document.body.appendChild(tip);let cur=null;const SEL='[data-item],[data-player]';
+  const tip=document.createElement('div');tip.id='itip';tip.style.display='none';document.body.appendChild(tip);let cur=null;const SEL='a[href]';
   const pos=e=>{const pad=14,w=tip.offsetWidth,h=tip.offsetHeight;let x=e.clientX+pad,y=e.clientY+pad;
     if(x+w>innerWidth-8)x=e.clientX-pad-w;if(y+h>innerHeight-8)y=e.clientY-pad-h;tip.style.left=Math.max(8,x)+'px';tip.style.top=Math.max(8,y)+'px';};
   const hide=()=>{if(cur){cur=null;tip.style.display='none';}};
