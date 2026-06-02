@@ -179,7 +179,8 @@ function ovr(a){if(!a||!a.attr)return 0;let s=0;for(const d of ATTR_DEFS)s+=a.at
 // the pool. When champ_stats is absent (in-game broadcast page / pre-load) the pool is unknown → treat all as
 // available (no filtering, no regression).
 const inPool=n=>!poolKnown||!!champStatById[n];
-function makeSortable(t){[...t.tHead.rows[0].cells].forEach((th,i)=>{if('nosort' in th.dataset)return;th.style.cursor='pointer';
+function makeSortable(t){if(!t.tHead||!t.tHead.rows[0]||!t.tBodies[0])return; // headerless tables (e.g. the H2H comparison grid) aren't sortable
+  [...t.tHead.rows[0].cells].forEach((th,i)=>{if('nosort' in th.dataset)return;th.style.cursor='pointer';
   th.onclick=()=>{const tb=t.tBodies[0];const rows=[...tb.rows];const dir=th._d=-(th._d||1);const num='num' in th.dataset;
     rows.sort((a,b)=>{let x=a.cells[i].dataset.s??a.cells[i].textContent,y=b.cells[i].dataset.s??b.cells[i].textContent;if(num){x=parseFloat(x)||0;y=parseFloat(y)||0;}else{x=(''+x).toLowerCase();y=(''+y).toLowerCase();}return x<y?dir:x>y?-dir:0;});
     rows.forEach(r=>tb.appendChild(r));};});}
@@ -287,8 +288,10 @@ function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</
       +'</div>';});
     h+='</div>';}
   const ms=D.matches.filter(m=>m.blue_team_id==id||m.red_team_id==id);
-  if(ms.length){h+='<h2>Recent matches</h2><table><thead><tr><th>Opponent</th><th>Result</th></tr></thead><tbody>';
-    ms.forEach(m=>{const opp=m.blue_team_id==id?m.red_team_id:m.blue_team_id;const won=(m.blue_team_id==id)===m.blue_win;h+='<tr><td>'+tLink(opp)+'</td><td class="'+(won?'win':'loss')+'"><a href="#/match/'+m.id+'">'+(won?'Win':'Loss')+'</a></td></tr>';});h+='</tbody></table>';}
+  if(ms.length){const h2h={};ms.forEach(m=>{const opp=m.blue_team_id==id?m.red_team_id:m.blue_team_id,won=(m.blue_team_id==id)===m.blue_win;const e=(h2h[opp]=h2h[opp]||{g:0,w:0});e.g++;if(won)e.w++;});
+    const rows=Object.keys(h2h).map(o=>({o:+o,g:h2h[o].g,w:h2h[o].w})).sort((a,b)=>b.g-a.g||b.w/b.g-a.w/a.g);
+    h+='<h2>Head-to-head <small>record vs each opponent · click a record to compare</small></h2><table class="s"><thead><tr><th>Opponent</th><th data-num>Games</th><th data-num>Record</th><th data-num>Win%</th></tr></thead><tbody>'
+      +rows.map(x=>'<tr><td>'+tLink(x.o)+'</td><td class="num">'+x.g+'</td><td class="num"><a href="#/h2h/'+id+'/'+x.o+'">'+x.w+'–'+(x.g-x.w)+'</a></td><td class="num '+(x.w/x.g>=0.5?'win':'loss')+'">'+pct(x.w,x.g)+'</td></tr>').join('')+'</tbody></table>';}
   // Per-team champion pick/ban tendencies from this team's recent games.
   const tp={},tb={};let tg=0;
   ms.forEach(m=>{const isB=m.blue_team_id==id;tg++;
@@ -299,6 +302,34 @@ function vTeam(id){const t=teamById[id];if(!t)return mount('<h1>Team not found</
   if(pks.length||bns.length){h+='<h2>Picks &amp; bans <small>(last '+tg+' games)</small></h2><div style="display:flex;gap:24px;flex-wrap:wrap">';
     const tbl=(title,rows)=>'<div><table class="s"><thead><tr><th>'+title+'</th><th data-num>Games</th></tr></thead><tbody>'+(rows.map(e=>'<tr><td>'+cLink(e[0])+'</td><td class="num">'+e[1]+'</td></tr>').join('')||'<tr><td class="sub">none</td><td></td></tr>')+'</tbody></table></div>';
     h+=tbl('Most picked',pks)+tbl('Most banned',bns)+'</div>';}
+  mount(h);}
+// ===== Team head-to-head: two teams compared + every meeting between them. =====
+function vH2H(a,b){a=+a;b=+b;const ta=teamById[a],tb=teamById[b];if(!ta||!tb)return mount('<h1>Head-to-head</h1><p class="sub">Teams not found. <a href="#/teams">← Teams</a></p>');
+  const games=D.matches.filter(m=>(m.blue_team_id==a&&m.red_team_id==b)||(m.blue_team_id==b&&m.red_team_id==a));
+  let aw=0,bw=0;games.forEach(m=>{if((m.blue_team_id==a)===m.blue_win)aw++;else bw++;});
+  const standOf=tid=>{const t=teamById[tid];for(const c of (compsByLeague[t.league_id]||[])){const i=c.standings.findIndex(s=>s.team_id==tid);if(i>=0)return {rank:i+1,st:c.standings[i]};}return null;};
+  const ratingOf=t=>{const r=(t.roster||[]).filter(x=>x!=null).map(x=>athById[x]).filter(p=>p&&p.matches);return r.length?r.reduce((s,p)=>s+p.rating/(p.matches*10),0)/r.length:0;};
+  const sa=standOf(a),sb=standOf(b);
+  let h='<p class="sub"><a href="#/team/'+a+'">← '+esc(ta.name)+'</a></p>';
+  h+='<section class="h2h-hero"><a class="h2h-team" href="#/team/'+a+'">'+teamLogo(a,56)+'<span>'+esc(ta.name)+'</span></a>'
+    +'<div class="h2h-score"><span'+(aw>bw?' class="win"':'')+'>'+aw+'</span><span class="h2h-dash">–</span><span'+(bw>aw?' class="win"':'')+'>'+bw+'</span><span class="h2h-sub">'+games.length+' meeting'+(games.length===1?'':'s')+'</span></div>'
+    +'<a class="h2h-team" href="#/team/'+b+'">'+teamLogo(b,56)+'<span>'+esc(tb.name)+'</span></a></section>';
+  // comparison grid (highlight the better side; cross-league rank shown neutral)
+  const cmp=(label,av,bv,da,db,hi)=>{let ca='',cb='';if(hi!=null&&av!==bv){const aB=hi?av>bv:av<bv;ca=aB?'h2h-best':'';cb=aB?'':'h2h-best';}
+    return '<tr><td class="num '+ca+'">'+da+'</td><th>'+label+'</th><td class="num '+cb+'">'+db+'</td></tr>';};
+  let cr='';
+  if(sa&&sb){cr+=cmp('League position',sa.rank,sb.rank,'#'+sa.rank+' <span class="sub">'+esc(lgName(ta.league_id))+'</span>','#'+sb.rank+' <span class="sub">'+esc(lgName(tb.league_id))+'</span>',null);
+    cr+=cmp('League record',sa.st.win/((sa.st.win+sa.st.lose)||1),sb.st.win/((sb.st.win+sb.st.lose)||1),sa.st.win+'–'+sa.st.lose,sb.st.win+'–'+sb.st.lose,true);
+    cr+=cmp('Points',sa.st.points,sb.st.points,sa.st.points,sb.st.points,true);}
+  const ra=ratingOf(ta),rb=ratingOf(tb);
+  cr+=cmp('Avg player rating',ra,rb,ra?ra.toFixed(2):'—',rb?rb.toFixed(2):'—',true);
+  cr+=cmp('Fans',ta.fan_count||0,tb.fan_count||0,(ta.fan_count||0).toLocaleString(),(tb.fan_count||0).toLocaleString(),true);
+  cr+=cmp('Balance',ta.balance||0,tb.balance||0,money(ta.balance),money(tb.balance),true);
+  h+='<h2>Comparison</h2><table class="s h2h-cmp"><tbody>'+cr+'</tbody></table>';
+  if(games.length){h+='<h2>Meetings <small>team kills shown as the score</small></h2><table class="s"><thead><tr><th style="text-align:right">'+esc(ta.name)+'</th><th data-nosort>Score</th><th>'+esc(tb.name)+'</th><th data-nosort></th></tr></thead><tbody>'
+    +games.map(m=>{const aWon=(m.blue_team_id==a)===m.blue_win;const ak=m.blue_team_id==a?m.blue_perf.kills:m.red_perf.kills,bk=m.blue_team_id==a?m.red_perf.kills:m.blue_perf.kills;
+      return '<tr><td style="text-align:right" class="'+(aWon?'win':'')+'">'+esc(ta.name)+'</td><td class="num"><b>'+ak+'–'+bk+'</b></td><td class="'+(!aWon?'win':'')+'">'+esc(tb.name)+'</td><td><a href="#/match/'+m.id+'">view</a></td></tr>';}).join('')+'</tbody></table>';}
+  else h+='<p class="sub">These teams haven’t met in the recorded games.</p>';
   mount(h);}
 function vPlayers(){const fa=D.athletes.filter(a=>a.team_id==null).length;
   let h='<h1>Players</h1><p class="sub">click a column to sort · '+D.athletes.length+' athletes'+(fa?' · <a href="#/free-agents">'+fa+' free agents →</a>':'')+'</p><table class="s"><thead><tr><th>Player</th><th>Team</th><th data-num>Age</th><th data-num>M</th><th data-num>W</th><th data-num>Rating</th><th data-num>K</th><th data-num>D</th><th data-num>A</th><th data-num>MVP</th></tr></thead><tbody>';
@@ -456,6 +487,19 @@ function vChampion(name){const c=champByName[name];const def=champDef(name);cons
       if(imp.length){const show=imp.length<=5?imp:[...imp.slice(0,3),...imp.slice(-2)];
         h+='<h3 class="ibh">Item impact <small>win rate with vs without · swing items only</small></h3><div class="impact">'+show.map(o=>'<div class="imp"><span class="imp-i">'+itemChip(o.i,26)+'</span><span class="imp-n">'+esc(itemName(o.i))+'</span><span class="imp-wr">'+o.wrW.toFixed(0)+'% win<span class="sub"> · '+o.gw+'g</span></span><span class="imp-d '+(o.delta>=0?'pos':'neg')+'" title="win-rate swing vs games without this item">'+(o.delta>=0?'+':'')+o.delta.toFixed(0)+'</span></div>').join('')+'</div>';}
     }
+    // Synergies & matchups — co-pick (SAME side) and versus (OPPOSITE side) win rates from full match context.
+    const syn={},synW={},cnt={},cntW={};
+    D.matches.forEach(m=>{const bw=m.blue_win,blue=m.picks.filter(p=>p.blue),red=m.picks.filter(p=>!p.blue);
+      [[blue,red,bw],[red,blue,!bw]].forEach(a=>{const side=a[0],opp=a[1],won=a[2];if(!side.some(p=>p.champion==name))return;
+        side.forEach(p=>{if(p.champion==name)return;syn[p.champion]=(syn[p.champion]||0)+1;if(won)synW[p.champion]=(synW[p.champion]||0)+1;});
+        opp.forEach(p=>{cnt[p.champion]=(cnt[p.champion]||0)+1;if(won)cntW[p.champion]=(cntW[p.champion]||0)+1;});});});
+    const minPair=Math.max(4,Math.round(cp.length*0.06)),wrCls=w=>w>=53?'win':w<=47?'loss':'';
+    const synR=Object.keys(syn).filter(k=>syn[k]>=minPair).map(k=>({c:k,n:syn[k],w:100*(synW[k]||0)/syn[k]})).sort((a,b)=>b.w-a.w);
+    const cntR=Object.keys(cnt).filter(k=>cnt[k]>=minPair).map(k=>({c:k,n:cnt[k],w:100*(cntW[k]||0)/cnt[k]})).sort((a,b)=>b.w-a.w);
+    if(synR.length)h+='<h2>Synergies <small>'+esc(champName(name))+'’s win rate when paired · ≥'+minPair+' games</small></h2><table class="s"><thead><tr><th>Teammate</th><th data-num>Together</th><th data-num>Win%</th></tr></thead><tbody>'
+      +synR.slice(0,8).map(x=>'<tr><td>'+cLink(x.c,32)+'</td><td class="num">'+x.n+'</td><td class="num '+wrCls(x.w)+'">'+x.w.toFixed(0)+'%</td></tr>').join('')+'</tbody></table>';
+    if(cntR.length)h+='<h2>Matchups <small>'+esc(champName(name))+'’s win rate vs · favorable (top) → counters (bottom) · ≥'+minPair+' games</small></h2><table class="s"><thead><tr><th>Opponent</th><th data-num>Faced</th><th data-num>Win%</th></tr></thead><tbody>'
+      +cntR.map(x=>'<tr><td>'+cLink(x.c,32)+'</td><td class="num">'+x.n+'</td><td class="num '+wrCls(x.w)+'">'+x.w.toFixed(0)+'%</td></tr>').join('')+'</tbody></table>';
   }
   const players={};D.matches.forEach(m=>m.picks.forEach(p=>{if(p.champion==name)players[p.athlete_id]=(players[p.athlete_id]||0)+1;}));
   const pr=Object.entries(players).sort((a,b)=>b[1]-a[1]);
@@ -845,12 +889,12 @@ function vSearch(q){q=String(q||'').toLowerCase();
   h+='<h2>Players</h2><div class="chips">'+(pl.map(a=>'<span>'+aLink(a.id)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   h+='<h2>Champions</h2><div class="chips">'+(ch.map(c=>'<span>'+cLink(c.name)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';mount(h);}
 function setActiveNav(){const seg=location.hash.replace(/^#\/?/,'').split('/')[0]||'';
-  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',items:'#/items',item:'#/items',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
+  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',items:'#/items',item:'#/items',matches:'#/matches',match:'#/matches',h2h:'#/teams',leagues:'#/leagues',league:'#/leagues'};
   const want=m[seg]||'#/';document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')===want));}
 function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);
   switch(p[0]){case '':return vHome();case 'standings':return vStandings();case 'news':return vNews();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
     case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'free-agents':return vFreeAgents();case 'champions':return vChampions();
-    case 'champ-stats':return vChampStats();case 'items':return vItems();case 'item':return vItem(p.slice(1).join('/'));
+    case 'champ-stats':return vChampStats();case 'items':return vItems();case 'item':return vItem(p.slice(1).join('/'));case 'h2h':return vH2H(p[1],p[2]);
     case 'champion':return vChampion(p.slice(1).join('/'));case 'matches':return vMatches();case 'match':return vMatch(+p[1]);
     case 'leagues':return vLeagues();case 'league':return vLeague(+p[1]);
     case 'article':return vArticle(p[1]);case 'transfers':return vTransfers();
