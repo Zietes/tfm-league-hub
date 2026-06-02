@@ -395,6 +395,35 @@ function vLeaders(){const A=(D.athletes||[]).filter(a=>a.matches>0);
   h+=leadCard('Assists','total',top(a=>a.assists,false,'r'),v=>v);
   h+=leadCard('Damage','total · recorded games',top(a=>dmg[a.id]||0,false,'r'),v=>v.toLocaleString());
   mount(h+'</div>');}
+// ===== Player-vs-player compare. =====
+function ensureCmpNames(){if(window.__cmpDL||typeof document==='undefined')return;window.__cmpDL=1;
+  const dl=document.createElement('datalist');dl.id='cmp-names';dl.innerHTML=(D.athletes||[]).map(a=>'<option value="'+esc(a.name)+'">').join('');document.body.appendChild(dl);}
+function cmpPick(aid,name){const b=athByName[String(name||'').trim().toLowerCase()];if(b&&b.id!=aid)location.hash='#/pvp/'+aid+'/'+b.id;}
+function vPVP(a,b){a=+a;b=+b;const A=athById[a],B=athById[b];if(!A||!B)return mount('<h1>Compare players</h1><p class="sub">Player(s) not found. <a href="#/players">← Players</a></p>');
+  const avgR=x=>x.matches?x.rating/(x.matches*10):0,kdaOf=x=>x.deaths?(x.kills+x.assists)/x.deaths:(x.kills+x.assists);
+  // when they met: same match, opposite sides
+  let aw=0,bw=0,met=0;D.matches.forEach(m=>{const pa=m.picks.find(p=>p.athlete_id==a),pb=m.picks.find(p=>p.athlete_id==b);
+    if(pa&&pb&&pa.blue!==pb.blue){met++;if((pa.blue===m.blue_win))aw++;else bw++;}});
+  const teamSub=x=>x.team_id!=null?esc(tName(x.team_id)):'Free agent';
+  let h='<p class="sub"><a href="#/player/'+a+'">← '+esc(A.name)+'</a></p>'
+    +'<section class="h2h-hero"><a class="h2h-team" href="#/player/'+a+'">'+avatar(a,56)+'<span>'+esc(A.name)+'</span><small>'+teamSub(A)+'</small></a>'
+    +'<div class="h2h-score">'+(met?'<span'+(aw>bw?' class="win"':'')+'>'+aw+'</span><span class="h2h-dash">–</span><span'+(bw>aw?' class="win"':'')+'>'+bw+'</span><span class="h2h-sub">'+met+' head-to-head game'+(met===1?'':'s')+'</span>':'<span class="vs-lbl">VS</span>')+'</div>'
+    +'<a class="h2h-team" href="#/player/'+b+'">'+avatar(b,56)+'<span>'+esc(B.name)+'</span><small>'+teamSub(B)+'</small></a></section>';
+  const cmp=(label,av,bv,da,db,hi)=>{let ca='',cb='';if(hi!=null&&av!==bv){const aB=hi?av>bv:av<bv;ca=aB?'h2h-best':'';cb=aB?'':'h2h-best';}
+    return '<tr><td class="num '+ca+'">'+da+'</td><th>'+label+'</th><td class="num '+cb+'">'+db+'</td></tr>';};
+  let cr=cmp('Rating',avgR(A),avgR(B),A.matches?avgR(A).toFixed(2):'—',B.matches?avgR(B).toFixed(2):'—',true)
+    +cmp('Matches',A.matches,B.matches,A.matches,B.matches,null)
+    +cmp('Win%',A.matches?A.wins/A.matches:0,B.matches?B.wins/B.matches:0,pct(A.wins,A.matches),pct(B.wins,B.matches),true)
+    +cmp('KDA',kdaOf(A),kdaOf(B),kdaOf(A).toFixed(2),kdaOf(B).toFixed(2),true)
+    +cmp('Kills',A.kills,B.kills,A.kills,B.kills,true)+cmp('Deaths',A.deaths,B.deaths,A.deaths,B.deaths,false)
+    +cmp('Assists',A.assists,B.assists,A.assists,B.assists,true)+cmp('MVPs',A.mvp,B.mvp,A.mvp,B.mvp,true)
+    +cmp('Overall',ovr(A),ovr(B),ovr(A),ovr(B),true)+cmp('Age',A.age,B.age,A.age,B.age,null);
+  h+='<h2>Head to head</h2><table class="s h2h-cmp"><tbody>'+cr+'</tbody></table>';
+  if(A.attr&&B.attr)h+='<h2>Attributes <small>'+esc(A.name)+' (azure) vs '+esc(B.name)+' (gold)</small></h2><div class="pvp-attrs">'+ATTR_DEFS.map(d=>{const va=A.attr[d[1]]||0,vb=B.attr[d[1]]||0,t=(va+vb)||1;
+    return '<div class="pvp-attr"><span class="pa-v'+(va>vb?' hi':'')+'">'+va+'</span><div class="pa-mid"><span class="pa-l">'+esc(d[0])+'</span><div class="pa-bar"><i style="flex:0 0 '+(100*va/t).toFixed(1)+'%"></i><i style="flex:0 0 '+(100*vb/t).toFixed(1)+'%"></i></div></div><span class="pa-v'+(vb>va?' hi':'')+'">'+vb+'</span></div>';}).join('')+'</div>';
+  const pool=x=>(x.recent_champions||[]).slice(0,6).map(c=>cLink(c,24)).join('')||'<span class="sub">—</span>';
+  h+='<h2>Champion pools</h2><div class="pvp-pools"><div><div class="pp-h">'+esc(A.name)+'</div><div class="chips">'+pool(A)+'</div></div><div><div class="pp-h">'+esc(B.name)+'</div><div class="chips">'+pool(B)+'</div></div></div>';
+  mount(h);}
 function vPlayers(){const fa=D.athletes.filter(a=>a.team_id==null).length;
   let h='<h1>Players</h1><p class="sub">click a column to sort · '+D.athletes.length+' athletes · <a href="#/leaders">stat leaders →</a>'+(fa?' · <a href="#/free-agents">'+fa+' free agents →</a>':'')+'</p><table class="s"><thead><tr><th>Player</th><th>Team</th><th data-num>Age</th><th data-num>M</th><th data-num>W</th><th data-num>Rating</th><th data-num>K</th><th data-num>D</th><th data-num>A</th><th data-num>MVP</th></tr></thead><tbody>';
   D.athletes.forEach(a=>{h+='<tr><td>'+aLink(a.id,40)+'</td><td>'+(a.team_id!=null?tLink(a.team_id):'<span class="sub">FA</span>')+'</td><td class="num">'+a.age+'</td><td class="num">'+a.matches+'</td><td class="num">'+a.wins+'</td><td class="num">'+avgRating(a.rating,a.matches)+'</td><td class="num">'+a.kills+'</td><td class="num">'+a.deaths+'</td><td class="num">'+a.assists+'</td><td class="num">'+a.mvp+'</td></tr>';});
@@ -403,6 +432,11 @@ function vPlayer(id){const a=athById[id];if(!a)return mount('<h1>Player not foun
   const kda=a.deaths?((a.kills+a.assists)/a.deaths).toFixed(2):(a.kills+a.assists?'∞':'—');
   const stats=[statCell('Rating',avgRating(a.rating,a.matches)),statCell('Matches',a.matches),statCell('Win%',pct(a.wins,a.matches)),statCell('KDA',kda),statCell('MVP',a.mvp)];
   let h=heroHeader(avatar(id,74),'Player',esc(a.name),(a.team_id!=null?tLink(a.team_id):'Free agent')+' · age '+a.age,stats);
+  ensureCmpNames();
+  h+='<div class="cmp-row"><input class="cmp-input" list="cmp-names" placeholder="Compare with a player…" onchange="cmpPick('+id+',this.value)">';
+  {const mates=(squadByTeam[a.team_id]||[]).filter(x=>x!=id).slice(0,5);
+    if(a.team_id!=null&&mates.length)h+='<span class="cmp-quick">vs teammate:'+mates.map(mid=>' <a href="#/pvp/'+id+'/'+mid+'">'+esc((athById[mid]||{}).name||('#'+mid))+'</a>').join('')+'</span>';}
+  h+='</div>';
   h+='<h2>Recent champions</h2><div class="chips">'+(a.recent_champions.map(c=>'<span>'+cLink(c)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   if(a.likes&&a.likes.length)h+='<h2>Favored champions <small>👍</small></h2><div class="chips">'+a.likes.map(c=>'<span>'+cLink(c)+'</span>').join('')+'</div>';
   if(a.dislikes&&a.dislikes.length)h+='<h2>Disliked champions <small>👎</small></h2><div class="chips">'+a.dislikes.map(c=>'<span>'+cLink(c)+'</span>').join('')+'</div>';
@@ -953,11 +987,11 @@ function vSearch(q){q=String(q||'').toLowerCase();
   h+='<h2>Players</h2><div class="chips">'+(pl.map(a=>'<span>'+aLink(a.id)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   h+='<h2>Champions</h2><div class="chips">'+(ch.map(c=>'<span>'+cLink(c.name)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';mount(h);}
 function setActiveNav(){const seg=location.hash.replace(/^#\/?/,'').split('/')[0]||'';
-  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',leaders:'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',items:'#/items',item:'#/items',matches:'#/matches',match:'#/matches',h2h:'#/teams',records:'#/records',leagues:'#/leagues',league:'#/leagues'};
+  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',leaders:'#/players',pvp:'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',items:'#/items',item:'#/items',matches:'#/matches',match:'#/matches',h2h:'#/teams',records:'#/records',leagues:'#/leagues',league:'#/leagues'};
   const want=m[seg]||'#/';document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')===want));}
 function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);
   switch(p[0]){case '':return vHome();case 'standings':return vStandings();case 'news':return vNews();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
-    case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'free-agents':return vFreeAgents();case 'leaders':return vLeaders();case 'champions':return vChampions();
+    case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'free-agents':return vFreeAgents();case 'leaders':return vLeaders();case 'pvp':return vPVP(p[1],p[2]);case 'champions':return vChampions();
     case 'champ-stats':return vChampStats();case 'items':return vItems();case 'item':return vItem(p.slice(1).join('/'));case 'h2h':return vH2H(p[1],p[2]);case 'records':return vRecords();
     case 'champion':return vChampion(p.slice(1).join('/'));case 'matches':return vMatches();case 'match':return vMatch(+p[1]);
     case 'leagues':return vLeagues();case 'league':return vLeague(+p[1]);
