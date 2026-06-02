@@ -493,13 +493,13 @@ function vChampion(name){const c=champByName[name];const def=champDef(name);cons
       [[blue,red,bw],[red,blue,!bw]].forEach(a=>{const side=a[0],opp=a[1],won=a[2];if(!side.some(p=>p.champion==name))return;
         side.forEach(p=>{if(p.champion==name)return;syn[p.champion]=(syn[p.champion]||0)+1;if(won)synW[p.champion]=(synW[p.champion]||0)+1;});
         opp.forEach(p=>{cnt[p.champion]=(cnt[p.champion]||0)+1;if(won)cntW[p.champion]=(cntW[p.champion]||0)+1;});});});
-    const minPair=Math.max(4,Math.round(cp.length*0.06)),wrCls=w=>w>=53?'win':w<=47?'loss':'';
+    const minPair=Math.max(4,Math.round(cp.length*0.06));
+    // compact win-rate pill: champ icon + name + win%, border tinted favorable(green)/counter(red); games in the title.
+    const wrPill=(c,n,w)=>'<a class="wrpill '+(w>=53?'win':w<=47?'loss':'')+'" href="#/champion/'+encodeURIComponent(c)+'" title="'+esc(champName(c))+' · '+n+' games · '+w.toFixed(0)+'% win">'+champIcon(c,24,true,'show')+'<span class="wp-n">'+esc(champName(c))+'</span><span class="wp-wr">'+w.toFixed(0)+'%</span></a>';
     const synR=Object.keys(syn).filter(k=>syn[k]>=minPair).map(k=>({c:k,n:syn[k],w:100*(synW[k]||0)/syn[k]})).sort((a,b)=>b.w-a.w);
     const cntR=Object.keys(cnt).filter(k=>cnt[k]>=minPair).map(k=>({c:k,n:cnt[k],w:100*(cntW[k]||0)/cnt[k]})).sort((a,b)=>b.w-a.w);
-    if(synR.length)h+='<h2>Synergies <small>'+esc(champName(name))+'’s win rate when paired · ≥'+minPair+' games</small></h2><table class="s"><thead><tr><th>Teammate</th><th data-num>Together</th><th data-num>Win%</th></tr></thead><tbody>'
-      +synR.slice(0,8).map(x=>'<tr><td>'+cLink(x.c,32)+'</td><td class="num">'+x.n+'</td><td class="num '+wrCls(x.w)+'">'+x.w.toFixed(0)+'%</td></tr>').join('')+'</tbody></table>';
-    if(cntR.length)h+='<h2>Matchups <small>'+esc(champName(name))+'’s win rate vs · favorable (top) → counters (bottom) · ≥'+minPair+' games</small></h2><table class="s"><thead><tr><th>Opponent</th><th data-num>Faced</th><th data-num>Win%</th></tr></thead><tbody>'
-      +cntR.map(x=>'<tr><td>'+cLink(x.c,32)+'</td><td class="num">'+x.n+'</td><td class="num '+wrCls(x.w)+'">'+x.w.toFixed(0)+'%</td></tr>').join('')+'</tbody></table>';
+    if(synR.length)h+='<h2>Synergies <small>win rate when paired · best duos · ≥'+minPair+' games</small></h2><div class="wrband">'+synR.slice(0,8).map(x=>wrPill(x.c,x.n,x.w)).join('')+'</div>';
+    if(cntR.length)h+='<h2>Matchups <small>win rate vs · favorable → counters · ≥'+minPair+' games</small></h2><div class="wrband">'+cntR.map(x=>wrPill(x.c,x.n,x.w)).join('')+'</div>';
   }
   const players={};D.matches.forEach(m=>m.picks.forEach(p=>{if(p.champion==name)players[p.athlete_id]=(players[p.athlete_id]||0)+1;}));
   const pr=Object.entries(players).sort((a,b)=>b[1]-a[1]);

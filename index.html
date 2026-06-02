@@ -180,6 +180,13 @@ td.r1{color:var(--gold)}td.r2{color:#c8d2df}td.r3{color:#cd8f5a}
 .tband-chip:hover{border-color:var(--acd);background:rgba(70,200,255,.08);color:#fff;text-decoration:none;transform:translateY(-1px)}
 /* out-of-pool champions: dimmed (not pickable this season), brighten on hover */
 .offpool .tband-chip{opacity:.42;filter:saturate(.6)}.offpool .tband-chip:hover{opacity:1;filter:none}
+/* synergy/matchup win-rate pills (compact, tinted favorable/counter) */
+.wrband{display:flex;flex-wrap:wrap;gap:7px;margin:6px 0 18px}
+.wrpill{display:inline-flex;align-items:center;gap:7px;padding:3px 11px 3px 4px;background:var(--surface);border:1px solid var(--line2);border-radius:999px;color:var(--link);font-weight:600;font-size:13px;transition:.12s}
+.wrpill:hover{transform:translateY(-1px);text-decoration:none;border-color:var(--acd);color:#fff}
+.wrpill .wp-wr{font:800 12px/1 var(--mono);color:var(--mut)}
+.wrpill.win{border-color:rgba(72,200,140,.42);background:rgba(72,200,140,.06)}.wrpill.win .wp-wr{color:var(--win)}
+.wrpill.loss{border-color:rgba(240,96,96,.42);background:rgba(240,96,96,.06)}.wrpill.loss .wp-wr{color:var(--loss)}
 /* Patch Watch cards — buff/nerf deltas vs base game */
 .pwatch{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin:6px 0 18px}
 .pw-card{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;transition:.12s}
