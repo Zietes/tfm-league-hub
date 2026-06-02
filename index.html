@@ -262,6 +262,18 @@ a.ichip,a.itxt{text-decoration:none;color:var(--link)}a.ichip:hover,a.itxt:hover
 .h2h-sub{position:absolute;bottom:-21px;left:50%;transform:translateX(-50%);white-space:nowrap;font:600 10px/1 var(--mono);color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
 .h2h-cmp td{width:38%}.h2h-cmp th{text-align:center;color:var(--mut);font:700 11px/1 var(--sans);text-transform:uppercase;letter-spacing:.04em}
 .h2h-best{color:var(--win) !important;font-weight:800}
+/* records & superlatives cards */
+.records-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:12px;margin:6px 0 20px}
+.rec-card{display:flex;flex-direction:column;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;transition:.12s}
+.rec-card:hover{border-color:var(--acd);text-decoration:none;transform:translateY(-2px)}
+.rec-k{font:700 10px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.rec-v{font:800 32px/1 var(--mono);color:#fff;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+.rec-u{font:700 11px/1 var(--mono);color:var(--ac);text-transform:uppercase;letter-spacing:.04em}
+.rec-u2{font:700 12px/1 var(--mono);color:var(--mut)}
+.rec-d{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--mut);font-weight:600;font-size:12.5px;margin-top:2px}
+.rec-d .rec-nm{color:var(--fg)}
+.rec-sc{font:800 13px/1 var(--mono);color:#fff;margin:0 2px}
+.rec-on{color:var(--faint);font-weight:500;margin:0 1px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:12px}
 .tile{display:flex;align-items:center;gap:13px;padding:14px 15px;background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);transition:.14s}
 .tile:hover{border-color:var(--acd);transform:translateY(-2px);text-decoration:none;box-shadow:0 8px 22px rgba(0,0,0,.4)}

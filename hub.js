@@ -190,7 +190,7 @@ function mount(html){const app=document.getElementById('app');app.innerHTML=html
   // re-render (would be a jarring fade every tick) — so clear the class when not revealing.
   if(_reveal){app.classList.remove('reveal');void app.offsetWidth;app.classList.add('reveal');}else app.classList.remove('reveal');}
 function nav(){document.getElementById('nav').innerHTML='<span class="brand">🏆 League Hub</span>'+
-  '<a href="#/">Home</a><a href="#/standings">Standings</a><a href="#/news">News</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/items">Items</a><a href="#/matches">Matches</a>'+
+  '<a href="#/">Home</a><a href="#/standings">Standings</a><a href="#/news">News</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/items">Items</a><a href="#/matches">Matches</a><a href="#/records">Records</a>'+
   '<input id="q" placeholder="Search teams, players, champions…"><span class="upd">#'+(D.updated||0)+'</span>';
   const q=document.getElementById('q');q.oninput=()=>{const v=q.value.trim();location.hash=v?('#/search/'+encodeURIComponent(v)):'#/';};}
 function statCell(l,v,cls){return '<div><span class="l">'+esc(l)+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>';}
@@ -331,6 +331,48 @@ function vH2H(a,b){a=+a;b=+b;const ta=teamById[a],tb=teamById[b];if(!ta||!tb)ret
       return '<tr><td style="text-align:right" class="'+(aWon?'win':'')+'">'+esc(ta.name)+'</td><td class="num"><b>'+ak+'–'+bk+'</b></td><td class="'+(!aWon?'win':'')+'">'+esc(tb.name)+'</td><td><a href="#/match/'+m.id+'">view</a></td></tr>';}).join('')+'</tbody></table>';}
   else h+='<p class="sub">These teams haven’t met in the recorded games.</p>';
   mount(h);}
+// ===== Records & superlatives: standout single-game + match records from the recorded games. =====
+const TPS=60; // game_tick → seconds (auto-battler runs ~60 ticks/s; longest/shortest ordering is rate-independent)
+const fmtDur=t=>{const s=Math.round(t/TPS);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+function vRecords(){const M=D.matches||[];
+  let h=heroHeader('','Almanac','League Records','Standout games &amp; performances across '+M.length+' recorded matches',[]);
+  if(!M.length)return mount(h+'<p class="sub">No games recorded yet — records fill in as matches are played.</p>');
+  // best two teams' ranks within a SHARED competition (so an upset gap is apples-to-apples).
+  const ranksIn=(a,b)=>{for(const c of D.competitions){const ia=(c.standings||[]).findIndex(s=>s.team_id==a),ib=(c.standings||[]).findIndex(s=>s.team_id==b);if(ia>=0&&ib>=0)return [ia+1,ib+1];}return null;};
+  let blowout=null,hiScore=null,longest=null,shortest=null,upset=null,teamDmg=null,mostK=null,mostD=null,mostCS=null,flawless=null;
+  M.forEach(m=>{const bk=m.blue_perf.kills,rk=m.red_perf.kills,diff=Math.abs(bk-rk),tot=bk+rk;
+    if(!blowout||diff>blowout.v)blowout={m,v:diff};
+    if(!hiScore||tot>hiScore.v)hiScore={m,v:tot};
+    if(m.duration>0&&(!longest||m.duration>longest.v))longest={m,v:m.duration};
+    if(m.duration>0&&(!shortest||m.duration<shortest.v))shortest={m,v:m.duration};
+    const bigSide=m.blue_perf.deal>=m.red_perf.deal,td=bigSide?m.blue_perf.deal:m.red_perf.deal;
+    if(!teamDmg||td>teamDmg.v)teamDmg={m,v:td,team:bigSide?m.blue_team_id:m.red_team_id};
+    const w=m.blue_win?m.blue_team_id:m.red_team_id,l=m.blue_win?m.red_team_id:m.blue_team_id,r=ranksIn(w,l);
+    if(r&&r[0]>r[1]&&(!upset||(r[0]-r[1])>upset.gap))upset={m,w,l,wr:r[0],lr:r[1],gap:r[0]-r[1]};
+    m.picks.forEach(p=>{if(!mostK||p.kills>mostK.v)mostK={p,m,v:p.kills};
+      if(!mostD||p.deal>mostD.v)mostD={p,m,v:p.deal};
+      if(!mostCS||p.cs>mostCS.v)mostCS={p,m,v:p.cs};
+      if(p.deaths===0&&(!flawless||p.kills>flawless.v||(p.kills===flawless.v&&p.deal>(flawless.p.deal||0))))flawless={p,m,v:p.kills};});});
+  // plain (non-link) badges for inside a card <a>
+  const tB=id=>teamLogo(id,22)+'<span class="rec-nm">'+esc(tName(id))+'</span>';
+  const aB=id=>avatar(id,22)+'<span class="rec-nm">'+esc((athById[id]||{}).name||('#'+id))+'</span>';
+  const score=m=>'<b class="rec-sc">'+m.blue_perf.kills+'–'+m.red_perf.kills+'</b>';
+  const card=(kick,val,unit,detail,m)=>'<a class="rec-card" href="#/match/'+m.id+'"><div class="rec-k">'+kick+'</div><div class="rec-v">'+val+(unit?'<span class="rec-u">'+unit+'</span>':'')+'</div><div class="rec-d">'+detail+'</div></a>';
+  const game=m=>tB(m.blue_team_id)+score(m)+tB(m.red_team_id);
+  const onChamp=p=>aB(p.athlete_id)+'<span class="rec-on">on</span>'+champIcon(p.champion,22,true,'show')+'<span class="rec-nm">'+esc(champName(p.champion))+'</span>';
+  h+='<h2>Match records</h2><div class="records-grid">';
+  if(blowout)h+=card('Biggest blowout',blowout.v,'kill diff',game(blowout.m),blowout.m);
+  if(upset)h+=card('Biggest upset','#'+upset.wr+'<span class="rec-u2">over #'+upset.lr+'</span>','',tB(upset.w)+'<span class="rec-on">beat</span>'+tB(upset.l),upset.m);
+  if(hiScore)h+=card('Highest-scoring game',hiScore.v,'total kills',game(hiScore.m),hiScore.m);
+  if(teamDmg)h+=card('Most team damage',teamDmg.v.toLocaleString(),'damage',tB(teamDmg.team),teamDmg.m);
+  if(longest)h+=card('Longest game',fmtDur(longest.v),'',game(longest.m),longest.m);
+  if(shortest)h+=card('Shortest game',fmtDur(shortest.v),'',game(shortest.m),shortest.m);
+  h+='</div><h2>Individual game records</h2><div class="records-grid">';
+  if(mostK)h+=card('Most kills, one game',mostK.v,'kills',onChamp(mostK.p),mostK.m);
+  if(mostD)h+=card('Most damage, one game',mostD.v.toLocaleString(),'damage',onChamp(mostD.p),mostD.m);
+  if(mostCS)h+=card('Most CS, one game',mostCS.v,'creeps',onChamp(mostCS.p),mostCS.m);
+  if(flawless)h+=card('Flawless performance',flawless.v+'<span class="rec-u2">/ 0 deaths</span>','',onChamp(flawless.p),flawless.m);
+  mount(h+'</div>');}
 function vPlayers(){const fa=D.athletes.filter(a=>a.team_id==null).length;
   let h='<h1>Players</h1><p class="sub">click a column to sort · '+D.athletes.length+' athletes'+(fa?' · <a href="#/free-agents">'+fa+' free agents →</a>':'')+'</p><table class="s"><thead><tr><th>Player</th><th>Team</th><th data-num>Age</th><th data-num>M</th><th data-num>W</th><th data-num>Rating</th><th data-num>K</th><th data-num>D</th><th data-num>A</th><th data-num>MVP</th></tr></thead><tbody>';
   D.athletes.forEach(a=>{h+='<tr><td>'+aLink(a.id,40)+'</td><td>'+(a.team_id!=null?tLink(a.team_id):'<span class="sub">FA</span>')+'</td><td class="num">'+a.age+'</td><td class="num">'+a.matches+'</td><td class="num">'+a.wins+'</td><td class="num">'+avgRating(a.rating,a.matches)+'</td><td class="num">'+a.kills+'</td><td class="num">'+a.deaths+'</td><td class="num">'+a.assists+'</td><td class="num">'+a.mvp+'</td></tr>';});
@@ -889,12 +931,12 @@ function vSearch(q){q=String(q||'').toLowerCase();
   h+='<h2>Players</h2><div class="chips">'+(pl.map(a=>'<span>'+aLink(a.id)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   h+='<h2>Champions</h2><div class="chips">'+(ch.map(c=>'<span>'+cLink(c.name)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';mount(h);}
 function setActiveNav(){const seg=location.hash.replace(/^#\/?/,'').split('/')[0]||'';
-  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',items:'#/items',item:'#/items',matches:'#/matches',match:'#/matches',h2h:'#/teams',leagues:'#/leagues',league:'#/leagues'};
+  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',items:'#/items',item:'#/items',matches:'#/matches',match:'#/matches',h2h:'#/teams',records:'#/records',leagues:'#/leagues',league:'#/leagues'};
   const want=m[seg]||'#/';document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')===want));}
 function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);
   switch(p[0]){case '':return vHome();case 'standings':return vStandings();case 'news':return vNews();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
     case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'free-agents':return vFreeAgents();case 'champions':return vChampions();
-    case 'champ-stats':return vChampStats();case 'items':return vItems();case 'item':return vItem(p.slice(1).join('/'));case 'h2h':return vH2H(p[1],p[2]);
+    case 'champ-stats':return vChampStats();case 'items':return vItems();case 'item':return vItem(p.slice(1).join('/'));case 'h2h':return vH2H(p[1],p[2]);case 'records':return vRecords();
     case 'champion':return vChampion(p.slice(1).join('/'));case 'matches':return vMatches();case 'match':return vMatch(+p[1]);
     case 'leagues':return vLeagues();case 'league':return vLeague(+p[1]);
     case 'article':return vArticle(p[1]);case 'transfers':return vTransfers();
