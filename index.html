@@ -227,6 +227,25 @@ td.r1{color:var(--gold)}td.r2{color:#c8d2df}td.r3{color:#cd8f5a}
 .itip-st li{color:var(--ac);font-weight:600}
 .itip-o{color:var(--fg);margin-top:8px;padding-top:8px;border-top:1px solid var(--line);line-height:1.45}
 .itip-into{color:var(--mut);font-size:11px;margin-top:8px}
+.ptip-team{display:flex;align-items:center;gap:7px;font-weight:700;color:#fff;margin:5px 0 6px}
+.ptip-stats{color:var(--mut);font:600 11px/1.3 var(--mono)}
+.itip-st.big{margin:2px 0 10px;gap:5px}.itip-st.big li{font-size:14px}
+/* item chips as links */
+a.ichip,a.itxt{text-decoration:none;color:var(--link)}a.ichip:hover,a.itxt:hover{border-color:var(--acd)}
+/* items index */
+.itemgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:10px;margin:6px 0 18px}
+.icard{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;transition:.12s}
+.icard:hover{border-color:var(--acd);text-decoration:none;transform:translateY(-1px)}
+.icard-ic{flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center}
+.icard-b{display:flex;flex-direction:column;min-width:0}
+.icard-n{font-weight:700;color:#fff;font-size:13.5px}
+.icard-s{font:600 10.5px/1.3 var(--mono);color:var(--mut)}
+/* item detail */
+.iart{display:inline-flex;align-items:center;justify-content:center}
+.item-eff{max-width:560px;line-height:1.5;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--acd);border-radius:8px;padding:11px 14px;margin:6px 0 16px}
+.bpath{display:flex;flex-direction:column;gap:8px;margin:6px 0 18px}
+.bp-l{font:700 9px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-right:6px}
+.ilink{display:inline-flex;align-items:center;gap:5px;margin-right:8px;font-weight:600}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:12px}
 .tile{display:flex;align-items:center;gap:13px;padding:14px 15px;background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);transition:.14s}
 .tile:hover{border-color:var(--acd);transform:translateY(-2px);text-decoration:none;box-shadow:0 8px 22px rgba(0,0,0,.4)}

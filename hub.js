@@ -88,7 +88,7 @@ const pct=(n,d)=>d?(100*n/d).toFixed(1)+'%':'—';
 const avgRating=(r,m)=>m?(r/(m*10)).toFixed(2):'—';
 const tName=id=>teamById[id]?teamById[id].name:'Team '+id;
 const tLink=(id,sz)=>'<a href="#/team/'+id+'">'+teamLogo(id,sz)+esc(tName(id))+'</a>';
-const aLink=(id,sz)=>athById[id]?'<a href="#/player/'+id+'">'+avatar(id,sz)+esc(athById[id].name)+'</a>':'#'+id;
+const aLink=(id,sz)=>athById[id]?'<a href="#/player/'+id+'" data-player="'+id+'">'+avatar(id,sz)+esc(athById[id].name)+'</a>':'#'+id;
 // Real champion icon via CSS sprite-crop of the game sheet, using window.CHAMP_FRAMES
 // (id -> {x,y,w,h,sw,sh}) + window.ICON_BASE. Absent (e.g. local broadcast page) -> ''.
 function champIcon(n,size,ground,extra){size=size||20;const F=window.CHAMP_FRAMES,f=F&&F[n];if(!f||!f.h)return champToken(n,size);
@@ -109,12 +109,13 @@ function spark(vals,invert,W,H){W=W||150;H=H||32;const P=4,n=vals?vals.length:0;
   const pts=vals.map((v,i)=>X(i).toFixed(1)+','+Y(v).toFixed(1)).join(' ');
   return '<svg class="spark" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" preserveAspectRatio="none"><polyline points="'+pts+'"/><circle cx="'+X(n-1).toFixed(1)+'" cy="'+Y(vals[n-1]).toFixed(1)+'" r="2.2"/></svg>';}
 const itemName=i=>{const k=D.items[i];return k?champName(k):'#'+i;};
-// Item as a real icon (hosted site) or a text-name fallback (in-game broadcast page, no ITEM_ICONS).
-// data-item carries the item id for the rich hover tooltip (setupItemTips); when ITEM_DATA is present we
-// drop the native title= (the custom tooltip replaces it), else keep title= as the name-only fallback.
+// Item chip: a real icon (hosted) or text-name fallback (in-game). When the item id is known it's a LINK to
+// the item page (#/item/:id); data-item drives the hover tooltip (setupTips). title= kept only as the
+// name-only fallback when ITEM_DATA is absent (in-game) so hovering still shows the name natively.
 function itemChip(i,size){const id=D.items[i]||'',ic=itemIcon(i,size||26),hd=!!(id&&window.ITEM_DATA&&window.ITEM_DATA[id]);
+  const inner=ic||esc(itemName(i)),cls=ic?'ichip':'itxt';
   const attr=(id?' data-item="'+esc(id)+'"':'')+(hd?'':' title="'+esc(itemName(i))+'"');
-  return ic?'<span class="ichip"'+attr+'>'+ic+'</span>':'<span class="itxt"'+attr+'>'+esc(itemName(i))+'</span>';}
+  return id?'<a class="'+cls+'" href="#/item/'+encodeURIComponent(id)+'"'+attr+'>'+inner+'</a>':'<span class="'+cls+'"'+attr+'>'+inner+'</span>';}
 // Rich item tooltip body from window.ITEM_DATA (hosted site only). Empty when absent → no tooltip shown.
 function itemTip(id){const d=window.ITEM_DATA&&window.ITEM_DATA[id];if(!d)return '';
   let h='<div class="itip-h"><span class="itip-n">'+esc(d.name)+'</span><span class="itip-t">Tier '+d.tier+'</span></div>'
@@ -123,15 +124,23 @@ function itemTip(id){const d=window.ITEM_DATA&&window.ITEM_DATA[id];if(!d)return
   if(d.option)h+='<div class="itip-o">'+esc(d.option)+'</div>';
   if(d.into&&d.into.length)h+='<div class="itip-into">Builds into '+d.into.map(x=>esc((window.ITEM_DATA[x]&&window.ITEM_DATA[x].name)||champName(x))).join(', ')+'</div>';
   return h;}
-// One delegated hover tooltip for any [data-item] element; set up once, survives SPA re-renders.
-function setupItemTips(){if(window.__itip||!window.ITEM_DATA||typeof document==='undefined')return;window.__itip=1;
-  const tip=document.createElement('div');tip.id='itip';tip.style.display='none';document.body.appendChild(tip);let cur=null;
+// Player tooltip — team + key stats (works in-game too: only needs D.athletes/D.teams, no external data).
+function playerTip(id){const a=athById[id];if(!a)return '';const t=a.team_id!=null?teamById[a.team_id]:null,bp=bestPos(a);
+  let h='<div class="itip-h"><span class="itip-n">'+esc(a.name)+'</span>'+(bp?'<span class="itip-t">'+POS[bp.idx]+'</span>':'')+'</div>'
+    +'<div class="ptip-team">'+(t?teamLogo(t.id,18)+esc(t.name):'<span class="sub">Free agent</span>')+'</div>';
+  const bits=[];if(a.matches){bits.push('Rating '+avgRating(a.rating,a.matches));bits.push(a.wins+'–'+(a.matches-a.wins)+' · '+pct(a.wins,a.matches));}
+  bits.push('Age '+a.age);
+  return h+'<div class="ptip-stats">'+bits.join(' <span class="dot">·</span> ')+'</div>';}
+// One delegated hover tooltip for any [data-item] / [data-player] element; set up once, survives re-renders.
+function tipHTML(el){return el.hasAttribute('data-item')?itemTip(el.getAttribute('data-item')):el.hasAttribute('data-player')?playerTip(+el.getAttribute('data-player')):'';}
+function setupTips(){if(window.__tips||typeof document==='undefined')return;window.__tips=1;
+  const tip=document.createElement('div');tip.id='itip';tip.style.display='none';document.body.appendChild(tip);let cur=null;const SEL='[data-item],[data-player]';
   const pos=e=>{const pad=14,w=tip.offsetWidth,h=tip.offsetHeight;let x=e.clientX+pad,y=e.clientY+pad;
     if(x+w>innerWidth-8)x=e.clientX-pad-w;if(y+h>innerHeight-8)y=e.clientY-pad-h;tip.style.left=Math.max(8,x)+'px';tip.style.top=Math.max(8,y)+'px';};
   const hide=()=>{if(cur){cur=null;tip.style.display='none';}};
-  document.addEventListener('mouseover',e=>{const el=e.target.closest&&e.target.closest('[data-item]');if(!el){hide();return;}const html=itemTip(el.getAttribute('data-item'));if(!html){hide();return;}cur=el;tip.innerHTML=html;tip.style.display='block';pos(e);});
+  document.addEventListener('mouseover',e=>{const el=e.target.closest&&e.target.closest(SEL);if(!el){hide();return;}const html=tipHTML(el);if(!html){hide();return;}cur=el;tip.innerHTML=html;tip.style.display='block';pos(e);});
   document.addEventListener('mousemove',e=>{if(cur)pos(e);});
-  document.addEventListener('mouseout',e=>{const el=e.target.closest&&e.target.closest('[data-item]');if(el&&el===cur){cur=null;tip.style.display='none';}});
+  document.addEventListener('mouseout',e=>{const el=e.target.closest&&e.target.closest(SEL);if(el&&el===cur)hide();});
 }
 // item icon: CSS-crop the 18×18 atlas via window.ITEM_ICONS[i]=[x,y,w,h] px. Absent → ''.
 // ability icon: CSS-crop the skill_icon atlas via window.SKILL_ICONS["<champ>_<idx>"]. Absent → ''.
@@ -163,12 +172,12 @@ function makeSortable(t){[...t.tHead.rows[0].cells].forEach((th,i)=>{if('nosort'
     rows.sort((a,b)=>{let x=a.cells[i].dataset.s??a.cells[i].textContent,y=b.cells[i].dataset.s??b.cells[i].textContent;if(num){x=parseFloat(x)||0;y=parseFloat(y)||0;}else{x=(''+x).toLowerCase();y=(''+y).toLowerCase();}return x<y?dir:x>y?-dir:0;});
     rows.forEach(r=>tb.appendChild(r));};});}
 let _reveal=false;
-function mount(html){const app=document.getElementById('app');app.innerHTML=html;app.querySelectorAll('table.s').forEach(makeSortable);setupItemTips();
+function mount(html){const app=document.getElementById('app');app.innerHTML=html;app.querySelectorAll('table.s').forEach(makeSortable);setupTips();
   // Replay the staggered entrance only on real navigation (go()), never on the 20s data-refresh
   // re-render (would be a jarring fade every tick) — so clear the class when not revealing.
   if(_reveal){app.classList.remove('reveal');void app.offsetWidth;app.classList.add('reveal');}else app.classList.remove('reveal');}
 function nav(){document.getElementById('nav').innerHTML='<span class="brand">🏆 League Hub</span>'+
-  '<a href="#/">Home</a><a href="#/standings">Standings</a><a href="#/news">News</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/matches">Matches</a>'+
+  '<a href="#/">Home</a><a href="#/standings">Standings</a><a href="#/news">News</a><a href="#/leagues">Leagues</a><a href="#/teams">Teams</a><a href="#/players">Players</a><a href="#/champions">Champions</a><a href="#/items">Items</a><a href="#/matches">Matches</a>'+
   '<input id="q" placeholder="Search teams, players, champions…"><span class="upd">#'+(D.updated||0)+'</span>';
   const q=document.getElementById('q');q.oninput=()=>{const v=q.value.trim();location.hash=v?('#/search/'+encodeURIComponent(v)):'#/';};}
 function statCell(l,v,cls){return '<div><span class="l">'+esc(l)+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>';}
@@ -466,6 +475,43 @@ function vChampStats(){const pool=(D.champ_stats||[]).slice();
     h+='<tr><td>'+cLink(c.id,32)+'</td><td class="sub">'+(def?esc(champCat(def.category)):'—')+'</td>'
       +CSTAT_FIELDS.map(f=>{const v=c.stat[f]||0,gw=(c.growth&&c.growth[f])||0;return '<td class="num" data-s="'+v+'">'+v+(gw?'<span class="sp-g" title="per level">+'+gw+'</span>':'')+'</td>';}).join('')+'</tr>';});
   mount(h+'</tbody></table>');}
+// item id -> array index into D.items (for itemIcon / pick.items membership).
+function itemIdx(id){return D.items?D.items.indexOf(id):-1;}
+// small name+icon link to an item page (used in build paths).
+function itemLink(id){const i=itemIdx(id),ic=i>=0?itemIcon(i,22):'',nm=(window.ITEM_DATA&&window.ITEM_DATA[id]&&window.ITEM_DATA[id].name)||champName(id);
+  return '<a class="ilink" href="#/item/'+encodeURIComponent(id)+'" data-item="'+esc(id)+'">'+(ic?'<span class="ichip">'+ic+'</span>':'')+esc(nm)+'</a>';}
+// ===== Items: a browsable shop reference (stats/effects/tiers/build paths) + per-item detail. =====
+function vItems(){const ID=window.ITEM_DATA;
+  let h=heroHeader('','Reference','Items','The full item shop · stats, effects, tiers &amp; build paths',
+    [statCell('Items',ID?Object.keys(ID).length:(D.items||[]).length)]);
+  if(!ID){return mount(h+'<p class="sub">Detailed item data isn’t available here.</p><div class="chips">'+(D.items||[]).map((k,i)=>'<span>'+itemChip(i,24)+' '+esc(itemName(i))+'</span>').join('')+'</div>');}
+  h+='<p class="sub">click an item for full details · hover any icon for a quick view</p>';
+  const byTier={};Object.keys(ID).forEach(id=>{(byTier[ID[id].tier]=byTier[ID[id].tier]||[]).push(id);});
+  Object.keys(byTier).map(Number).sort((a,b)=>a-b).forEach(t=>{
+    const list=byTier[t].sort((a,b)=>ID[a].price-ID[b].price||ID[a].name.localeCompare(ID[b].name));
+    h+='<h2>Tier '+t+' <small>'+list.length+' items</small></h2><div class="itemgrid">'+list.map(id=>{const d=ID[id],i=itemIdx(id);
+      return '<a class="icard" href="#/item/'+encodeURIComponent(id)+'" data-item="'+esc(id)+'"><span class="icard-ic">'+(i>=0?itemIcon(i,34):'')+'</span><span class="icard-b"><span class="icard-n">'+esc(d.name)+'</span><span class="icard-s">'+esc(d.cat)+' · $'+d.price.toLocaleString()+'</span></span></a>';}).join('')+'</div>';});
+  mount(h);}
+function vItem(id){const ID=window.ITEM_DATA,d=ID&&ID[id],i=itemIdx(id);
+  const name=d?d.name:(i>=0?itemName(i):champName(id));
+  const art=i>=0?'<span class="iart">'+itemIcon(i,72)+'</span>':'';
+  const stats=d?[statCell('Tier',d.tier),statCell('Price','$'+(d.price||0).toLocaleString()),statCell('Class',d.cat||'—')]:[];
+  let h=heroHeader(art,'Item',esc(name),'',stats);
+  if(d){
+    if(d.stats&&d.stats.length)h+='<h2>Stats</h2><ul class="itip-st big">'+d.stats.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';
+    if(d.option)h+='<h2>Effect</h2><p class="item-eff">'+esc(d.option)+'</p>';
+    const from=ID?Object.keys(ID).filter(x=>(ID[x].into||[]).indexOf(id)>=0):[];
+    if(from.length||(d.into&&d.into.length)){h+='<h2>Build path</h2><div class="bpath">'
+      +(from.length?'<div><span class="bp-l">Builds from</span> '+from.map(itemLink).join(' '):'')+(from.length?'</div>':'')
+      +(d.into&&d.into.length?'<div><span class="bp-l">Builds into</span> '+d.into.map(itemLink).join(' ')+'</div>':'')+'</div>';}
+  } else h+='<p class="sub">Detailed stats aren’t available here.</p>';
+  // Most built by — which champions buy this item most (ties items into the meta).
+  if(i>=0){const byCh={},wonByCh={};let tot=0;
+    D.matches.forEach(m=>{const bw=m.blue_win;m.picks.forEach(p=>{if((p.items||[]).indexOf(i)>=0){byCh[p.champion]=(byCh[p.champion]||0)+1;if(p.blue===bw)wonByCh[p.champion]=(wonByCh[p.champion]||0)+1;tot++;}});});
+    const rows=Object.entries(byCh).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    if(rows.length)h+='<h2>Most built by <small>'+tot+' purchases in recent games</small></h2><table class="s"><thead><tr><th>Champion</th><th data-num>Builds</th><th data-num>Win%</th></tr></thead><tbody>'
+      +rows.map(([c,n])=>'<tr><td>'+cLink(c,32)+'</td><td class="num">'+n+'</td><td class="num">'+pct(wonByCh[c]||0,n)+'</td></tr>').join('')+'</tbody></table>';}
+  mount(h);}
 function decodeRef(s,comp){let m;s=String(s);
   if(m=s.match(/^Normal\((\d+)\)/))return tLink(+m[1]);
   if(m=s.match(/^CompetitionRank\(\d+,\s*(\d+)\)/)){const r=+m[1],st=comp&&comp.standings[r-1];return 'Seed '+r+(st?' · '+tLink(st.team_id):'');}
@@ -616,7 +662,7 @@ function formDots(tid,n){return teamForm(tid,n||5).map(w=>'<span class="'+(w?'wi
 function h2hGames(a,b){return D.matches.filter(m=>(m.blue_team_id==a&&m.red_team_id==b)||(m.blue_team_id==b&&m.red_team_id==a));}
 // Name-ONLY links for article prose (logos/avatars belong in tables/cards, not mid-sentence).
 const tLinkT=id=>'<a href="#/team/'+id+'">'+esc(tName(id))+'</a>';
-const aLinkT=id=>athById[id]?'<a href="#/player/'+id+'">'+esc(athById[id].name)+'</a>':('#'+id);
+const aLinkT=id=>athById[id]?'<a href="#/player/'+id+'" data-player="'+id+'">'+esc(athById[id].name)+'</a>':('#'+id);
 const cLinkT=name=>'<a href="#/champion/'+encodeURIComponent(name)+'">'+esc(champName(name))+'</a>';
 function statLabel(field){if(typeof ATTR_DEFS!=='undefined')for(const d of ATTR_DEFS)if(d[1]===field)return d[0];return cap(String(field).replace(/_/g,' '));}
 function statChangeLine(sc){const parts=[];String(sc||'').split(';').forEach(e=>{const x=e.split('|');if(x.length>=3){const f=x[0].split('?').pop().split('.').pop();parts.push(statLabel(f)+' '+x[1]+'→'+x[2]);}});return parts;}
@@ -787,12 +833,12 @@ function vSearch(q){q=String(q||'').toLowerCase();
   h+='<h2>Players</h2><div class="chips">'+(pl.map(a=>'<span>'+aLink(a.id)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   h+='<h2>Champions</h2><div class="chips">'+(ch.map(c=>'<span>'+cLink(c.name)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';mount(h);}
 function setActiveNav(){const seg=location.hash.replace(/^#\/?/,'').split('/')[0]||'';
-  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
+  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',items:'#/items',item:'#/items',matches:'#/matches',match:'#/matches',leagues:'#/leagues',league:'#/leagues'};
   const want=m[seg]||'#/';document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')===want));}
 function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);
   switch(p[0]){case '':return vHome();case 'standings':return vStandings();case 'news':return vNews();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
     case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'free-agents':return vFreeAgents();case 'champions':return vChampions();
-    case 'champ-stats':return vChampStats();
+    case 'champ-stats':return vChampStats();case 'items':return vItems();case 'item':return vItem(p.slice(1).join('/'));
     case 'champion':return vChampion(p.slice(1).join('/'));case 'matches':return vMatches();case 'match':return vMatch(+p[1]);
     case 'leagues':return vLeagues();case 'league':return vLeague(+p[1]);
     case 'article':return vArticle(p[1]);case 'transfers':return vTransfers();
