@@ -373,8 +373,30 @@ function vRecords(){const M=D.matches||[];
   if(mostCS)h+=card('Most CS, one game',mostCS.v,'creeps',onChamp(mostCS.p),mostCS.m);
   if(flawless)h+=card('Flawless performance',flawless.v+'<span class="rec-u2">/ 0 deaths</span>','',onChamp(flawless.p),flawless.m);
   mount(h+'</div>');}
+// ===== Stat Leaders: curated top-5 leaderboards across stat categories. =====
+function leadCard(title,sub,top,fmt){if(!top.length)return '';
+  return '<div class="lead-card"><div class="lead-h">'+title+(sub?' <small>'+sub+'</small>':'')+'</div><ol class="lead-list">'
+    +top.map((x,i)=>'<li><a href="#/player/'+x.id+'"><span class="lead-rk'+(i===0?' top':'')+'">'+(i+1)+'</span>'+avatar(x.id,24)+'<span class="lead-nm">'+esc((athById[x.id]||{}).name||('#'+x.id))+'</span><span class="lead-val">'+fmt(x.v)+'</span></a></li>').join('')+'</ol></div>';}
+function vLeaders(){const A=(D.athletes||[]).filter(a=>a.matches>0);
+  let h=heroHeader('','Statistics','Stat Leaders','The league’s statistical leaders · '+A.length+' players with games',[]);
+  if(!A.length)return mount(h+'<p class="sub">No games played yet — leaders fill in as matches happen.</p>');
+  const ms=A.map(a=>a.matches).sort((x,y)=>x-y),med=ms[Math.floor(ms.length/2)]||0,minG=Math.max(3,Math.round(med*0.5));
+  const dmg={};D.matches.forEach(m=>m.picks.forEach(p=>{dmg[p.athlete_id]=(dmg[p.athlete_id]||0)+(p.deal||0);})); // total damage from recorded games
+  const avgR=a=>a.matches?a.rating/(a.matches*10):0;
+  // top-5 by fn; gate=require ≥minG games; sec='m' tiebreak by games (proven), else by rating.
+  const top=(fn,gate,sec)=>{const pool=gate?A.filter(a=>a.matches>=minG):A;
+    return pool.map(a=>({id:a.id,v:fn(a),m:a.matches,r:avgR(a)})).filter(x=>x.v>0).sort((x,y)=>y.v-x.v||(sec==='m'?y.m-x.m:y.r-x.r)||y.m-x.m).slice(0,5);};
+  h+='<p class="sub">Rate stats (rating · KDA · win%) require ≥'+minG+' games; ties break toward more games played.</p><div class="leaders-grid">';
+  h+=leadCard('Rating','average · ≥'+minG+'g',top(avgR,true,'m'),v=>v.toFixed(2));
+  h+=leadCard('KDA','(K+A)/D · ≥'+minG+'g',top(a=>a.deaths?(a.kills+a.assists)/a.deaths:(a.kills+a.assists),true,'m'),v=>v.toFixed(2));
+  h+=leadCard('Win rate','≥'+minG+'g',top(a=>a.wins/a.matches,true,'m'),v=>(100*v).toFixed(0)+'%');
+  h+=leadCard('MVPs','total',top(a=>a.mvp,false,'r'),v=>v);
+  h+=leadCard('Kills','total',top(a=>a.kills,false,'r'),v=>v);
+  h+=leadCard('Assists','total',top(a=>a.assists,false,'r'),v=>v);
+  h+=leadCard('Damage','total · recorded games',top(a=>dmg[a.id]||0,false,'r'),v=>v.toLocaleString());
+  mount(h+'</div>');}
 function vPlayers(){const fa=D.athletes.filter(a=>a.team_id==null).length;
-  let h='<h1>Players</h1><p class="sub">click a column to sort · '+D.athletes.length+' athletes'+(fa?' · <a href="#/free-agents">'+fa+' free agents →</a>':'')+'</p><table class="s"><thead><tr><th>Player</th><th>Team</th><th data-num>Age</th><th data-num>M</th><th data-num>W</th><th data-num>Rating</th><th data-num>K</th><th data-num>D</th><th data-num>A</th><th data-num>MVP</th></tr></thead><tbody>';
+  let h='<h1>Players</h1><p class="sub">click a column to sort · '+D.athletes.length+' athletes · <a href="#/leaders">stat leaders →</a>'+(fa?' · <a href="#/free-agents">'+fa+' free agents →</a>':'')+'</p><table class="s"><thead><tr><th>Player</th><th>Team</th><th data-num>Age</th><th data-num>M</th><th data-num>W</th><th data-num>Rating</th><th data-num>K</th><th data-num>D</th><th data-num>A</th><th data-num>MVP</th></tr></thead><tbody>';
   D.athletes.forEach(a=>{h+='<tr><td>'+aLink(a.id,40)+'</td><td>'+(a.team_id!=null?tLink(a.team_id):'<span class="sub">FA</span>')+'</td><td class="num">'+a.age+'</td><td class="num">'+a.matches+'</td><td class="num">'+a.wins+'</td><td class="num">'+avgRating(a.rating,a.matches)+'</td><td class="num">'+a.kills+'</td><td class="num">'+a.deaths+'</td><td class="num">'+a.assists+'</td><td class="num">'+a.mvp+'</td></tr>';});
   mount(h+'</tbody></table>');}
 function vPlayer(id){const a=athById[id];if(!a)return mount('<h1>Player not found</h1>');
@@ -931,11 +953,11 @@ function vSearch(q){q=String(q||'').toLowerCase();
   h+='<h2>Players</h2><div class="chips">'+(pl.map(a=>'<span>'+aLink(a.id)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';
   h+='<h2>Champions</h2><div class="chips">'+(ch.map(c=>'<span>'+cLink(c.name)+'</span>').join('')||'<span class="sub">none</span>')+'</div>';mount(h);}
 function setActiveNav(){const seg=location.hash.replace(/^#\/?/,'').split('/')[0]||'';
-  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',items:'#/items',item:'#/items',matches:'#/matches',match:'#/matches',h2h:'#/teams',records:'#/records',leagues:'#/leagues',league:'#/leagues'};
+  const m={'':'#/',standings:'#/standings',news:'#/news',article:'#/news',transfers:'#/news',teams:'#/teams',team:'#/teams',players:'#/players',player:'#/players','free-agents':'#/players',leaders:'#/players',champions:'#/champions','champ-stats':'#/champions',champion:'#/champions',items:'#/items',item:'#/items',matches:'#/matches',match:'#/matches',h2h:'#/teams',records:'#/records',leagues:'#/leagues',league:'#/leagues'};
   const want=m[seg]||'#/';document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')===want));}
 function router(){setActiveNav();const p=location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);
   switch(p[0]){case '':return vHome();case 'standings':return vStandings();case 'news':return vNews();case 'teams':return vTeams();case 'team':return vTeam(+p[1]);
-    case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'free-agents':return vFreeAgents();case 'champions':return vChampions();
+    case 'players':return vPlayers();case 'player':return vPlayer(+p[1]);case 'free-agents':return vFreeAgents();case 'leaders':return vLeaders();case 'champions':return vChampions();
     case 'champ-stats':return vChampStats();case 'items':return vItems();case 'item':return vItem(p.slice(1).join('/'));case 'h2h':return vH2H(p[1],p[2]);case 'records':return vRecords();
     case 'champion':return vChampion(p.slice(1).join('/'));case 'matches':return vMatches();case 'match':return vMatch(+p[1]);
     case 'leagues':return vLeagues();case 'league':return vLeague(+p[1]);

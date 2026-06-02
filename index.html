@@ -274,6 +274,19 @@ a.ichip,a.itxt{text-decoration:none;color:var(--link)}a.ichip:hover,a.itxt:hover
 .rec-d .rec-nm{color:var(--fg)}
 .rec-sc{font:800 13px/1 var(--mono);color:#fff;margin:0 2px}
 .rec-on{color:var(--faint);font-weight:500;margin:0 1px}
+/* stat leaders cards */
+.leaders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px;margin:6px 0 20px}
+.lead-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.lead-h{font:800 13px/1 var(--sans);color:#fff;margin-bottom:8px}
+.lead-h small{font:600 10px/1 var(--mono);color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin-left:6px}
+.lead-list{list-style:none;margin:0;padding:0;counter-reset:none}
+.lead-list li{border-top:1px solid var(--line)}.lead-list li:first-child{border-top:none}
+.lead-list a{display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--fg)}
+.lead-list a:hover{text-decoration:none;color:#fff}
+.lead-rk{flex:none;width:16px;text-align:center;font:800 11px/1 var(--mono);color:var(--faint)}
+.lead-rk.top{color:var(--gold)}
+.lead-nm{flex:1;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lead-val{font:800 13px/1 var(--mono);color:var(--ac)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:12px}
 .tile{display:flex;align-items:center;gap:13px;padding:14px 15px;background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);transition:.14s}
 .tile:hover{border-color:var(--acd);transform:translateY(-2px);text-decoration:none;box-shadow:0 8px 22px rgba(0,0,0,.4)}
