@@ -1,5 +1,16 @@
 [
   {
+    "id": "ccd684667d2a519a",
+    "file": "league_data_ccd684667d2a519a.json",
+    "label": "Rapid Storm +119 teams",
+    "teams": 120,
+    "leagues": 12,
+    "leader": "Cyber Vanguard",
+    "today": "2026-02-04",
+    "updated": 1,
+    "pushed": "2026-06-02 04:46:05"
+  },
+  {
     "id": "fpa3a6b2ef1fc363",
     "file": "league_data_fpa3a6b2ef1fc363.json",
     "label": "Rapid Storm +119 teams",
