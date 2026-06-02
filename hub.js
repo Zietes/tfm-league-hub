@@ -110,7 +110,29 @@ function spark(vals,invert,W,H){W=W||150;H=H||32;const P=4,n=vals?vals.length:0;
   return '<svg class="spark" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" preserveAspectRatio="none"><polyline points="'+pts+'"/><circle cx="'+X(n-1).toFixed(1)+'" cy="'+Y(vals[n-1]).toFixed(1)+'" r="2.2"/></svg>';}
 const itemName=i=>{const k=D.items[i];return k?champName(k):'#'+i;};
 // Item as a real icon (hosted site) or a text-name fallback (in-game broadcast page, no ITEM_ICONS).
-function itemChip(i,size){const ic=itemIcon(i,size||26);return ic?'<span class="ichip" title="'+esc(itemName(i))+'">'+ic+'</span>':'<span class="itxt">'+esc(itemName(i))+'</span>';}
+// data-item carries the item id for the rich hover tooltip (setupItemTips); when ITEM_DATA is present we
+// drop the native title= (the custom tooltip replaces it), else keep title= as the name-only fallback.
+function itemChip(i,size){const id=D.items[i]||'',ic=itemIcon(i,size||26),hd=!!(id&&window.ITEM_DATA&&window.ITEM_DATA[id]);
+  const attr=(id?' data-item="'+esc(id)+'"':'')+(hd?'':' title="'+esc(itemName(i))+'"');
+  return ic?'<span class="ichip"'+attr+'>'+ic+'</span>':'<span class="itxt"'+attr+'>'+esc(itemName(i))+'</span>';}
+// Rich item tooltip body from window.ITEM_DATA (hosted site only). Empty when absent → no tooltip shown.
+function itemTip(id){const d=window.ITEM_DATA&&window.ITEM_DATA[id];if(!d)return '';
+  let h='<div class="itip-h"><span class="itip-n">'+esc(d.name)+'</span><span class="itip-t">Tier '+d.tier+'</span></div>'
+    +'<div class="itip-sub">'+esc(d.cat||'')+(d.price?' · $'+d.price.toLocaleString():'')+'</div>';
+  if(d.stats&&d.stats.length)h+='<ul class="itip-st">'+d.stats.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul>';
+  if(d.option)h+='<div class="itip-o">'+esc(d.option)+'</div>';
+  if(d.into&&d.into.length)h+='<div class="itip-into">Builds into '+d.into.map(x=>esc((window.ITEM_DATA[x]&&window.ITEM_DATA[x].name)||champName(x))).join(', ')+'</div>';
+  return h;}
+// One delegated hover tooltip for any [data-item] element; set up once, survives SPA re-renders.
+function setupItemTips(){if(window.__itip||!window.ITEM_DATA||typeof document==='undefined')return;window.__itip=1;
+  const tip=document.createElement('div');tip.id='itip';tip.style.display='none';document.body.appendChild(tip);let cur=null;
+  const pos=e=>{const pad=14,w=tip.offsetWidth,h=tip.offsetHeight;let x=e.clientX+pad,y=e.clientY+pad;
+    if(x+w>innerWidth-8)x=e.clientX-pad-w;if(y+h>innerHeight-8)y=e.clientY-pad-h;tip.style.left=Math.max(8,x)+'px';tip.style.top=Math.max(8,y)+'px';};
+  const hide=()=>{if(cur){cur=null;tip.style.display='none';}};
+  document.addEventListener('mouseover',e=>{const el=e.target.closest&&e.target.closest('[data-item]');if(!el){hide();return;}const html=itemTip(el.getAttribute('data-item'));if(!html){hide();return;}cur=el;tip.innerHTML=html;tip.style.display='block';pos(e);});
+  document.addEventListener('mousemove',e=>{if(cur)pos(e);});
+  document.addEventListener('mouseout',e=>{const el=e.target.closest&&e.target.closest('[data-item]');if(el&&el===cur){cur=null;tip.style.display='none';}});
+}
 // item icon: CSS-crop the 18×18 atlas via window.ITEM_ICONS[i]=[x,y,w,h] px. Absent → ''.
 // ability icon: CSS-crop the skill_icon atlas via window.SKILL_ICONS["<champ>_<idx>"]. Absent → ''.
 function skillIcon(name,idx,size){size=size||28;const r=window.SKILL_ICONS&&window.SKILL_ICONS[name+'_'+idx];if(!r||!r[3])return '';
@@ -141,7 +163,7 @@ function makeSortable(t){[...t.tHead.rows[0].cells].forEach((th,i)=>{if('nosort'
     rows.sort((a,b)=>{let x=a.cells[i].dataset.s??a.cells[i].textContent,y=b.cells[i].dataset.s??b.cells[i].textContent;if(num){x=parseFloat(x)||0;y=parseFloat(y)||0;}else{x=(''+x).toLowerCase();y=(''+y).toLowerCase();}return x<y?dir:x>y?-dir:0;});
     rows.forEach(r=>tb.appendChild(r));};});}
 let _reveal=false;
-function mount(html){const app=document.getElementById('app');app.innerHTML=html;app.querySelectorAll('table.s').forEach(makeSortable);
+function mount(html){const app=document.getElementById('app');app.innerHTML=html;app.querySelectorAll('table.s').forEach(makeSortable);setupItemTips();
   // Replay the staggered entrance only on real navigation (go()), never on the 20s data-refresh
   // re-render (would be a jarring fade every tick) — so clear the class when not revealing.
   if(_reveal){app.classList.remove('reveal');void app.offsetWidth;app.classList.add('reveal');}else app.classList.remove('reveal');}
@@ -506,7 +528,7 @@ function vMatch(id){const m=D.matches.find(x=>x.id==id);if(!m)return mount('<h1>
   h+='<div class="kv"><div>'+esc(tName(m.blue_team_id))+' bans <b>'+((m.blue_bans||[]).map(b=>esc(champName(b))).join(', ')||'—')+'</b></div><div>'+esc(tName(m.red_team_id))+' bans <b>'+((m.red_bans||[]).map(b=>esc(champName(b))).join(', ')||'—')+'</b></div></div>';
   const side=b=>{const ps=m.picks.filter(p=>p.blue==b).sort((x,y)=>x.position-y.position);
     return '<h2>'+tLink(b?m.blue_team_id:m.red_team_id,28)+(b===bw?' <span class="win">(won)</span>':'')+'</h2><table><thead><tr><th>Role</th><th>Player</th><th>Champion</th><th class="num">K</th><th class="num">D</th><th class="num">Dmg</th><th class="num">CS</th><th>Items</th></tr></thead><tbody>'+
-      ps.map(p=>'<tr><td>'+roleTag(p.position)+'</td><td>'+aLink(p.athlete_id,40)+'</td><td>'+cLink(p.champion,40)+'</td><td class="num">'+(p.kills||0)+'</td><td class="num">'+(p.deaths||0)+'</td><td class="num">'+(p.deal||0).toLocaleString()+'</td><td class="num">'+(p.cs||0)+'</td><td class="chips">'+((p.items||[]).map(i=>{const ic=itemIcon(i,26);return ic?'<span class="ichip" title="'+esc(itemName(i))+'">'+ic+'</span>':'<span>'+esc(itemName(i))+'</span>';}).join('')||'<span class="sub">—</span>')+'</td></tr>').join('')+'</tbody></table>';};
+      ps.map(p=>'<tr><td>'+roleTag(p.position)+'</td><td>'+aLink(p.athlete_id,40)+'</td><td>'+cLink(p.champion,40)+'</td><td class="num">'+(p.kills||0)+'</td><td class="num">'+(p.deaths||0)+'</td><td class="num">'+(p.deal||0).toLocaleString()+'</td><td class="num">'+(p.cs||0)+'</td><td class="chips">'+((p.items||[]).map(i=>itemChip(i,26)).join('')||'<span class="sub">—</span>')+'</td></tr>').join('')+'</tbody></table>';};
   mount(h+side(true)+side(false));}
 // ===== Newsroom: synthesized "reporter" stories from the exported data =====
 function teamRank(tid){for(const c of D.competitions){const i=c.standings.findIndex(s=>s.team_id==tid);if(i>=0)return {rank:i+1,n:c.standings.length,s:c.standings[i]};}return null;}
