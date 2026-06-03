@@ -1,5 +1,16 @@
 [
   {
+    "id": "92d51fcf8edb8bbd",
+    "file": "league_data_92d51fcf8edb8bbd.json",
+    "label": "Rapid Storm +119 teams",
+    "teams": 120,
+    "leagues": 12,
+    "leader": "Terra Comets",
+    "today": "2026-02-04",
+    "updated": 3,
+    "pushed": "2026-06-03 04:30:39"
+  },
+  {
     "id": "ccd684667d2a519a",
     "file": "league_data_ccd684667d2a519a.json",
     "label": "Rapid Storm +119 teams",
