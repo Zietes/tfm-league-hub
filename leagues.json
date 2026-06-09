@@ -1,5 +1,16 @@
 [
   {
+    "id": "1030cf0ce16b8084",
+    "file": "league_data_1030cf0ce16b8084.json",
+    "label": "Rapid Storm +119 teams",
+    "teams": 120,
+    "leagues": 12,
+    "leader": "Rapid Storm",
+    "today": "2026-01-08",
+    "updated": 8,
+    "pushed": "2026-06-09 04:04:41"
+  },
+  {
     "id": "399d214638d10103",
     "file": "league_data_399d214638d10103.json",
     "label": "Rapid Storm +119 teams",
