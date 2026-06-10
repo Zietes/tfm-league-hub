@@ -1,5 +1,16 @@
 [
   {
+    "id": "bf469515cf5a9383",
+    "file": "league_data_bf469515cf5a9383.json",
+    "label": "Rapid Storm +119 teams",
+    "teams": 120,
+    "leagues": 12,
+    "leader": "Void Gliders",
+    "today": "2026-02-04",
+    "updated": 4,
+    "pushed": "2026-06-10 03:46:59"
+  },
+  {
     "id": "1030cf0ce16b8084",
     "file": "league_data_1030cf0ce16b8084.json",
     "label": "Rapid Storm +119 teams",
